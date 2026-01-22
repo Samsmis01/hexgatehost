@@ -1,17 +1,13 @@
+const express = require("express")
+const cors = require("cors")
+const bodyParser = require("body-parser")
+const fs = require("fs")
+const path = require("path")
 
-import express from "express"
-import cors from "cors"
-import bodyParser from "body-parser"
-import fs from "fs"
-import path from "path"
-import { fileURLToPath } from "url"
+const { makeWASocket, useMultiFileAuthState } = require("@whiskeysockets/baileys")
 
-import makeWASocket, {
-  useMultiFileAuthState
-} from "@whiskeysockets/baileys"
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+// 🔥 IMPORT DE TON BOT
+const startBot = require("./bot/index.js").default
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -65,19 +61,24 @@ app.post("/pair", async (req, res) => {
 
     sock.ev.on("creds.update", saveCreds)
 
-    sock.ev.on("connection.update", ({ connection }) => {
+    sock.ev.on("connection.update", async ({ connection }) => {
       if (connection === "open") {
-        console.log(`✅ Connecté : ${number}`)
+        console.log(`✅ WhatsApp connecté : ${number}`)
+
+        // 🚀 LANCEMENT DE TON BOT
+        await startBot(sock, sessionPath)
+
+        activeBots.set(number, sock)
       }
 
       if (connection === "close") {
-        console.log(`❌ Déconnecté : ${number}`)
+        console.log(`❌ WhatsApp déconnecté : ${number}`)
         activeBots.delete(number)
       }
     })
 
+    // 🔑 Génération du pairing code
     const code = await sock.requestPairingCode(number)
-    activeBots.set(number, sock)
 
     res.json({
       success: true,
