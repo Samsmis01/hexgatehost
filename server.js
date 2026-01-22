@@ -1,13 +1,17 @@
-const express = require("express")
-const cors = require("cors")
-const bodyParser = require("body-parser")
-const fs = require("fs")
-const path = require("path")
+import express from "express"
+import cors from "cors"
+import bodyParser from "body-parser"
+import fs from "fs"
+import path from "path"
+import { fileURLToPath } from "url"
 
-const { makeWASocket, useMultiFileAuthState } = require("@whiskeysockets/baileys")
+import makeWASocket, { useMultiFileAuthState } from "@whiskeysockets/baileys"
 
 // 🔥 IMPORT DE TON BOT
-const startBot = require("./bot/index.js").default
+import startBot from "./bot/index.js"
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -18,9 +22,7 @@ app.use(express.static("public"))
 
 /* 📁 dossier des sessions */
 const SESSIONS_DIR = path.join(__dirname, "sessions")
-if (!fs.existsSync(SESSIONS_DIR)) {
-  fs.mkdirSync(SESSIONS_DIR)
-}
+if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR)
 
 /* 🧠 stockage des bots actifs */
 const activeBots = new Map()
@@ -34,23 +36,13 @@ app.get("/", (req, res) => {
 app.post("/pair", async (req, res) => {
   try {
     let { number } = req.body
-
-    if (!number) {
-      return res.status(400).json({ error: "Numéro manquant" })
-    }
+    if (!number) return res.status(400).json({ error: "Numéro manquant" })
 
     number = number.replace(/\D/g, "")
-
-    if (number.length < 10) {
-      return res.status(400).json({ error: "Numéro invalide" })
-    }
-
-    if (activeBots.has(number)) {
-      return res.status(400).json({ error: "Bot déjà actif pour ce numéro" })
-    }
+    if (number.length < 10) return res.status(400).json({ error: "Numéro invalide" })
+    if (activeBots.has(number)) return res.status(400).json({ error: "Bot déjà actif pour ce numéro" })
 
     const sessionPath = path.join(SESSIONS_DIR, number)
-
     const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
 
     const sock = makeWASocket({
@@ -67,7 +59,6 @@ app.post("/pair", async (req, res) => {
 
         // 🚀 LANCEMENT DE TON BOT
         await startBot(sock, sessionPath)
-
         activeBots.set(number, sock)
       }
 
