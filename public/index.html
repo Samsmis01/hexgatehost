@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Connexion WhatsApp Bot</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: #e5e7eb;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .box {
+      background: #020617;
+      padding: 25px;
+      border-radius: 10px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.6);
+      text-align: center;
+    }
+
+    h1 {
+      margin-bottom: 15px;
+      font-size: 22px;
+      color: #22c55e;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 12px;
+      border-radius: 6px;
+      border: none;
+      outline: none;
+      font-size: 16px;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 6px;
+      background: #22c55e;
+      color: #020617;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      background: #4ade80;
+      opacity: 0.6;
+    }
+
+    .result {
+      margin-top: 15px;
+      font-size: 18px;
+      word-break: break-word;
+    }
+
+    .code {
+      background: #020617;
+      padding: 10px;
+      border-radius: 6px;
+      margin-top: 10px;
+      font-weight: bold;
+      letter-spacing: 2px;
+      color: #38bdf8;
+    }
+
+    .error {
+      color: #ef4444;
+      margin-top: 10px;
+    }
+
+    .info {
+      font-size: 13px;
+      margin-top: 15px;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="box">
+    <h1>🔗 Connecter le bot WhatsApp</h1>
+
+    <input
+      type="tel"
+      id="number"
+      placeholder="Ex: 243812345678"
+    />
+
+    <button id="btn">Générer le code</button>
+
+    <div class="result" id="result"></div>
+
+    <div class="info">
+      Le code expire rapidement.<br />
+      Entre-le dans WhatsApp → Appareils liés
+    </div>
+  </div>
+
+  <script>
+    const btn = document.getElementById("btn")
+    const result = document.getElementById("result")
+    const input = document.getElementById("number")
+
+    btn.onclick = async () => {
+      const number = input.value.trim()
+
+      if (!number) {
+        result.innerHTML = '<div class="error">❌ Entre ton numéro</div>'
+        return
+      }
+
+      btn.disabled = true
+      result.innerHTML = "⏳ Génération du code..."
+
+      try {
+        const res = await fetch("/pair", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ number })
+        })
+
+        const data = await res.json()
+
+        if (!data.success) {
+          throw new Error(data.error || "Erreur inconnue")
+        }
+
+        result.innerHTML = `
+          ✅ Code généré :
+          <div class="code">${data.pairingCode}</div>
+        `
+      } catch (err) {
+        result.innerHTML = `<div class="error">❌ ${err.message}</div>`
+      } finally {
+        btn.disabled = false
+      }
+    }
+  </script>
+</body>
+  </html>
