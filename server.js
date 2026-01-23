@@ -1,4 +1,4 @@
-// server.js - VERSION ULTIME CORRIGÉE - CONNEXION STABLE
+// server.js - VERSION RENDER.COM
 import express from "express";
 import cors from "cors";
 import bodyParser from "body-parser";
@@ -24,13 +24,10 @@ const BOT_DIR = path.join(__dirname, "bot");
 
 if (!fs.existsSync(SESSIONS_DIR)) {
   fs.mkdirSync(SESSIONS_DIR, { recursive: true });
-  console.log("📁 Dossier sessions créé");
 }
 
 // Vérification bot
 const BOT_INDEX_PATH = path.join(BOT_DIR, "index.js");
-console.log(`🔍 Vérification bot: ${BOT_INDEX_PATH}`);
-console.log(`   Existe: ${fs.existsSync(BOT_INDEX_PATH) ? '✅' : '❌'}`);
 
 // 🎯 Variables globales
 let baileysAvailable = false;
@@ -40,9 +37,9 @@ let botProcesses = new Map();
 
 // 🔧 FONCTION POUR DÉMARRER VOTRE BOT
 async function startBot(phoneNumber, sessionPath) {
-  console.log(`\n🚀 [START BOT] ${phoneNumber}`);
-  
   try {
+    console.log(`🤖 Démarrage bot pour: ${phoneNumber}`);
+    
     if (!fs.existsSync(BOT_INDEX_PATH)) {
       console.error(`❌ bot/index.js non trouvé`);
       return null;
@@ -63,13 +60,9 @@ async function startBot(phoneNumber, sessionPath) {
         fs.rmSync(botSessionPath, { recursive: true, force: true });
       }
       fs.cpSync(sessionPath, botSessionPath, { recursive: true });
-      console.log(`📋 Session copiée vers bot`);
     }
     
     // Démarrer bot
-    console.log(`🤖 Lancement: node index.js`);
-    console.log(`📁 Répertoire: ${BOT_DIR}`);
-    
     const botProcess = spawn("node", ["index.js"], {
       cwd: BOT_DIR,
       env: {
@@ -78,25 +71,22 @@ async function startBot(phoneNumber, sessionPath) {
         SESSION_NAME: sessionName,
         SESSION_PATH: botSessionPath
       },
-      stdio: ['pipe', 'pipe', 'pipe'],
-      detached: false
+      stdio: ['pipe', 'pipe', 'pipe']
     });
     
     botProcesses.set(phoneNumber, botProcess);
     
     // Logs
     botProcess.stdout.on('data', (data) => {
-      const output = data.toString().trim();
-      if (output) console.log(`[BOT ${phoneNumber}]: ${output}`);
+      console.log(`[BOT ${phoneNumber}]: ${data.toString().trim()}`);
     });
     
     botProcess.stderr.on('data', (data) => {
-      const error = data.toString().trim();
-      if (error) console.error(`[BOT ${phoneNumber} ERROR]: ${error}`);
+      console.error(`[BOT ${phoneNumber} ERROR]: ${data.toString().trim()}`);
     });
     
     botProcess.on('close', (code) => {
-      console.log(`[BOT ${phoneNumber}] Fermé (code: ${code})`);
+      console.log(`[BOT ${phoneNumber}] Arrêté (code: ${code})`);
       botProcesses.delete(phoneNumber);
     });
     
@@ -111,19 +101,19 @@ async function startBot(phoneNumber, sessionPath) {
     return botProcess;
     
   } catch (error) {
-    console.error(`❌ Erreur démarrage bot:`, error.message);
+    console.error(`❌ Erreur démarrage bot:`, error);
     return null;
   }
 }
 
-// 🔧 FONCTION CHARGEMENT BAILEYS CORRIGÉE
+// 🔧 FONCTION CHARGEMENT BAILEYS
 async function loadBaileys() {
   if (Baileys && baileysAvailable) return true;
   
   console.log("🔄 Chargement Baileys...");
   
   try {
-    // Essayer ES Module d'abord
+    // Essayer ES Module
     try {
       const module = await import("@whiskeysockets/baileys");
       Baileys = module;
@@ -136,27 +126,14 @@ async function loadBaileys() {
       console.log("✅ Baileys (CommonJS)");
     }
     
-    // Vérifier fonctions critiques
-    if (!Baileys.makeWASocket) {
-      console.error("❌ makeWASocket non disponible");
-      return false;
-    }
-    if (!Baileys.useMultiFileAuthState) {
-      console.error("❌ useMultiFileAuthState non disponible");
-      return false;
-    }
-    if (!Baileys.fetchLatestBaileysVersion) {
-      console.error("❌ fetchLatestBaileysVersion non disponible");
-      return false;
-    }
-    if (!Baileys.Browsers) {
-      console.error("❌ Browsers non disponible");
-      return false;
+    if (Baileys.makeWASocket && Baileys.useMultiFileAuthState) {
+      baileysAvailable = true;
+      console.log("✨ Baileys prêt");
+      return true;
     }
     
-    baileysAvailable = true;
-    console.log("✨ Baileys prêt à l'emploi");
-    return true;
+    baileysAvailable = false;
+    return false;
     
   } catch (error) {
     console.error("❌ Erreur chargement Baileys:", error.message);
@@ -167,12 +144,24 @@ async function loadBaileys() {
 
 // 🌐 ROUTES
 app.get("/", (req, res) => {
+  // URL dynamique pour Render
+  const protocol = req.protocol;
+  const host = req.get('host');
+  const baseUrl = `${protocol}://${host}`;
+  
   res.json({
     success: true,
     message: "WhatsApp Bot Server",
     status: "online",
-    baileys: baileysAvailable,
+    server_url: baseUrl,
+    baileys_available: baileysAvailable,
     bot_ready: fs.existsSync(BOT_INDEX_PATH),
+    endpoints: {
+      panel: `${baseUrl}/panel`,
+      pair: `${baseUrl}/pair`,
+      stats: `${baseUrl}/stats`,
+      health: `${baseUrl}/health`
+    },
     timestamp: new Date().toISOString()
   });
 });
@@ -182,8 +171,14 @@ app.get("/health", (req, res) => {
     success: true,
     status: "healthy",
     baileys: baileysAvailable,
-    timestamp: new Date().toISOString()
+    bots_running: botProcesses.size,
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
   });
+});
+
+app.get("/panel", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 function validatePhoneNumber(number) {
@@ -191,23 +186,11 @@ function validatePhoneNumber(number) {
     return { valid: false, error: "Numéro requis" };
   }
   
-  // Nettoyer
   let cleaned = number.replace(/[^\d+]/g, '').trim();
   
   // Ajouter + si absent
-  if (!cleaned.startsWith('+') && cleaned.length > 0) {
-    // Détecter Congo RDC
-    if (cleaned.startsWith('243') && cleaned.length >= 12) {
-      cleaned = '+' + cleaned;
-    }
-    // Détecter France
-    else if (cleaned.startsWith('33') && cleaned.length >= 10) {
-      cleaned = '+' + cleaned;
-    }
-    // Par défaut
-    else if (cleaned.length >= 10) {
-      cleaned = '+' + cleaned;
-    }
+  if (!cleaned.startsWith('+') && cleaned.length >= 10) {
+    cleaned = '+' + cleaned;
   }
   
   if (cleaned.length < 10) {
@@ -217,11 +200,9 @@ function validatePhoneNumber(number) {
   return { valid: true, formatted: cleaned };
 }
 
-// 📱 ROUTE PAIRING - CONNEXION STABLE
+// 📱 ROUTE PAIRING
 app.post("/pair", async (req, res) => {
-  console.log("\n" + "=".repeat(50));
-  console.log("📞 NOUVELLE DEMANDE DE PAIRING");
-  console.log("=".repeat(50));
+  console.log("\n📞 Nouvelle demande de pairing");
   
   try {
     const { number } = req.body;
@@ -233,11 +214,8 @@ app.post("/pair", async (req, res) => {
       });
     }
     
-    console.log(`📱 Numéro reçu: ${number}`);
-    
     const validation = validatePhoneNumber(number);
     if (!validation.valid) {
-      console.log(`❌ Validation échouée: ${validation.error}`);
       return res.status(400).json({ 
         success: false, 
         error: validation.error 
@@ -245,73 +223,51 @@ app.post("/pair", async (req, res) => {
     }
     
     const formattedNumber = validation.formatted;
-    console.log(`✅ Numéro formaté: ${formattedNumber}`);
+    console.log(`📱 Pour: ${formattedNumber}`);
     
     // Charger Baileys
-    if (!Baileys) {
-      console.log("🔄 Chargement Baileys...");
-      await loadBaileys();
-    }
-    
-    if (!baileysAvailable || !Baileys) {
-      console.log("❌ Baileys non disponible");
+    if (!Baileys) await loadBaileys();
+    if (!baileysAvailable) {
       return res.status(503).json({
         success: false,
-        error: "Service WhatsApp temporairement indisponible"
+        error: "Service WhatsApp indisponible"
       });
     }
-    
-    console.log("✅ Baileys chargé");
     
     // Extraire fonctions
     const { 
       makeWASocket, 
       useMultiFileAuthState, 
       fetchLatestBaileysVersion,
-      Browsers,
-      DisconnectReason 
+      Browsers 
     } = Baileys;
     
-    // Vérifier
-    if (typeof makeWASocket !== 'function') {
-      console.error("❌ makeWASocket n'est pas une fonction");
-      return res.status(500).json({
-        success: false,
-        error: "Erreur interne WhatsApp"
-      });
-    }
-    
-    // Créer session
+    // Session
     const sessionId = formattedNumber.replace(/[^0-9]/g, '');
     const sessionPath = path.join(SESSIONS_DIR, sessionId);
     
-    console.log(`📁 Chemin session: ${sessionPath}`);
-    
     if (!fs.existsSync(sessionPath)) {
       fs.mkdirSync(sessionPath, { recursive: true });
-      console.log("✅ Dossier session créé");
     }
     
     let sock = null;
     let pairingCode = null;
     
     try {
-      // 1. CHARGER LA SESSION
-      console.log("🔄 Chargement état d'authentification...");
+      // Charger session
       const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
-      console.log("✅ État d'authentification chargé");
-      
-      // 2. VERSION BAILEYS
-      console.log("🔄 Récupération version Baileys...");
       const { version } = await fetchLatestBaileysVersion();
-      console.log(`✅ Version Baileys: ${version}`);
       
-      // 3. CONFIGURATION SOCKET - CORRIGÉE
-      console.log("🔄 Configuration socket WhatsApp...");
-      
-      // ✅ LOGGER COMPATIBLE
-      const createLogger = () => {
-        const baseLogger = {
+      // Logger compatible
+      const logger = {
+        level: 'silent',
+        trace: () => {},
+        debug: () => {},
+        info: () => {},
+        warn: () => {},
+        error: () => {},
+        fatal: () => {},
+        child: () => ({
           level: 'silent',
           trace: () => {},
           debug: () => {},
@@ -319,79 +275,34 @@ app.post("/pair", async (req, res) => {
           warn: () => {},
           error: () => {},
           fatal: () => {}
-        };
-        
-        // ✅ S'assurer que .child existe
-        if (typeof baseLogger.child !== 'function') {
-          baseLogger.child = () => baseLogger;
-        }
-        
-        return baseLogger;
+        })
       };
       
-      // ✅ CONFIGURATION STABLE
+      // Configuration socket
       const socketConfig = {
         version,
-        logger: createLogger(),
+        logger: logger,
         printQRInTerminal: false,
         auth: state,
         browser: Browsers.ubuntu("Chrome"),
-        markOnlineOnConnect: false,  // Important: false pour pairing
+        markOnlineOnConnect: false,
         syncFullHistory: false,
-        connectTimeoutMs: 45000,     // 45 secondes timeout
-        defaultQueryTimeoutMs: 30000,
-        // Options de stabilité
+        connectTimeoutMs: 30000,
+        defaultQueryTimeoutMs: 20000,
+        fireInitQueries: false,
         emitOwnEvents: true,
-        fireInitQueries: false,      // Important: false pour pairing
-        mobile: false,
-        // Keep alive
-        keepAliveIntervalMs: 15000,
-        // Retry
-        maxMsgRetryCount: 1,
-        retryRequestDelayMs: 1000,
-        // Optimisations
-        linkPreviewImageThumbnailWidth: 192,
-        generateHighQualityLinkPreview: false,
-        // Désactiver certaines fonctions pour pairing
-        getMessage: async () => undefined,
-        appStateMacVerification: {
-          patch: false,
-          snapshot: false
-        }
+        keepAliveIntervalMs: 10000
       };
       
-      console.log("✅ Configuration socket prête");
-      
-      // 4. CRÉER LA SOCKET
-      console.log("🔄 Création socket WhatsApp...");
+      // Créer socket
       sock = makeWASocket(socketConfig);
-      console.log("✅ Socket créée");
-      
-      // 5. ÉCOUTEURS D'ÉVÉNEMENTS
       sock.ev.on("creds.update", saveCreds);
       
-      sock.ev.on("connection.update", (update) => {
-        const { connection, lastDisconnect } = update;
-        console.log(`🔌 État connexion: ${connection}`);
-        
-        if (connection === 'close') {
-          console.log("🔌 Connexion fermée");
-          if (lastDisconnect?.error) {
-            console.log(`💥 Erreur: ${lastDisconnect.error.message}`);
-          }
-        } else if (connection === 'open') {
-          console.log("✅ Connexion WhatsApp ouverte");
-        } else if (connection === 'connecting') {
-          console.log("🔄 Connexion en cours...");
-        }
-      });
-      
-      // 6. ATTENDRE QUE LA CONNEXION SOIT PRÊTE
-      console.log("⏳ Attente connexion WhatsApp...");
+      // Attendre connexion
       await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
-          reject(new Error("Timeout connexion WhatsApp"));
-        }, 30000);
+          reject(new Error("Timeout connexion"));
+        }, 15000);
         
         sock.ev.once("connection.update", (update) => {
           if (update.connection === 'open' || update.qr) {
@@ -401,20 +312,12 @@ app.post("/pair", async (req, res) => {
         });
       });
       
-      console.log("✅ Connexion WhatsApp établie");
+      // Générer code
+      console.log(`🔗 Génération code...`);
+      pairingCode = await sock.requestPairingCode(formattedNumber);
+      console.log(`✅ Code: ${pairingCode}`);
       
-      // 7. GÉNÉRER LE CODE
-      console.log(`🔗 Demande code pour: ${formattedNumber}`);
-      
-      try {
-        pairingCode = await sock.requestPairingCode(formattedNumber);
-        console.log(`✅ CODE WHATSAPP GÉNÉRÉ: ${pairingCode}`);
-      } catch (codeError) {
-        console.error(`❌ Erreur génération code:`, codeError.message);
-        throw new Error(`Impossible de générer le code: ${codeError.message}`);
-      }
-      
-      // 8. SAUVEGARDER LE BOT
+      // Stocker
       activeBots.set(formattedNumber, {
         number: formattedNumber,
         connected: true,
@@ -423,46 +326,31 @@ app.post("/pair", async (req, res) => {
         timestamp: Date.now()
       });
       
-      console.log(`✅ Bot enregistré: ${formattedNumber}`);
-      
-      // 9. DÉMARRER LE BOT SI DISPONIBLE
+      // Démarrer bot si disponible
       if (fs.existsSync(BOT_INDEX_PATH)) {
-        console.log("🤖 Détection bot/index.js - Démarrage automatique...");
+        console.log("🤖 Démarrage auto du bot...");
         setTimeout(async () => {
           try {
-            const botProcess = await startBot(formattedNumber, sessionPath);
-            if (botProcess) {
-              console.log(`🎉 Bot ${formattedNumber} démarré avec succès!`);
-            }
-          } catch (botError) {
-            console.error(`⚠️  Erreur démarrage bot:`, botError.message);
+            await startBot(formattedNumber, sessionPath);
+          } catch (e) {
+            console.error("⚠️ Erreur démarrage bot:", e.message);
           }
-        }, 3000); // Attendre 3s avant de démarrer
-      } else {
-        console.log("ℹ️  bot/index.js non trouvé - Démarrage manuel requis");
+        }, 2000);
       }
       
-      // 10. FERMER PROPREMENT APRÈS 20 SECONDES
+      // Fermer socket après 10s
       setTimeout(() => {
-        if (sock && sock.ws) {
-          try {
-            sock.ws.close();
-            console.log("🔌 Socket fermée proprement");
-          } catch (e) {
-            // Ignorer
-          }
-        }
-      }, 20000);
+        try {
+          if (sock && sock.ws) sock.ws.close();
+        } catch (e) {}
+      }, 10000);
       
     } catch (pairError) {
-      console.error(`💥 ERREUR PENDANT PAIRING:`, pairError.message);
-      console.error(pairError.stack);
+      console.error(`❌ Erreur pairing:`, pairError.message);
       
       // Nettoyer
       try {
-        if (sock && sock.ws) {
-          sock.ws.close();
-        }
+        if (sock && sock.ws) sock.ws.close();
       } catch (e) {}
       
       try {
@@ -474,47 +362,33 @@ app.post("/pair", async (req, res) => {
       return res.status(500).json({
         success: false,
         error: "Erreur WhatsApp",
-        message: pairError.message || "La connexion WhatsApp a échoué"
+        message: pairError.message
       });
     }
     
-    // ✅ RÉPONSE SUCCÈS
-    console.log("\n" + "=".repeat(50));
-    console.log("✅ PAIRING RÉUSSI!");
-    console.log(`📱 Numéro: ${formattedNumber}`);
-    console.log(`🔑 Code: ${pairingCode}`);
-    console.log("=".repeat(50) + "\n");
-    
+    // Réponse
     res.json({
       success: true,
-      pairingCode: pairingNumber,
+      pairingCode: pairingCode,
       number: formattedNumber,
-      message: "✅ Code WhatsApp généré avec succès",
-      demo_mode: false,
-      real_whatsapp: true,
+      message: "✅ Code WhatsApp généré",
       bot_auto_start: fs.existsSync(BOT_INDEX_PATH),
       instructions: [
-        "1. Allez sur https://web.whatsapp.com",
-        "2. Cliquez sur 'Connecter avec un numéro de téléphone'",
+        "1. https://web.whatsapp.com",
+        "2. 'Connecter avec un numéro de téléphone'",
         `3. Entrez: ${formattedNumber}`,
-        `4. Saisissez: ${pairingCode}`,
-        "5. Cliquez sur 'Valider'",
-        "6. Le bot démarrera automatiquement"
+        `4. Code: ${pairingCode}`,
+        "5. Valider"
       ],
-      expiresIn: "5 minutes",
       timestamp: new Date().toISOString()
     });
     
   } catch (error) {
-    console.error("\n💥 ERREUR GLOBALE SERVEUR:");
-    console.error(error.message);
-    console.error(error.stack);
-    
+    console.error(`💥 Erreur serveur:`, error);
     res.status(500).json({
       success: false,
       error: "Erreur serveur",
-      message: "Une erreur inattendue est survenue",
-      timestamp: new Date().toISOString()
+      message: error.message
     });
   }
 });
@@ -532,23 +406,32 @@ app.post("/start-bot/:number", async (req, res) => {
     const botProcess = await startBot(number, bot.sessionPath);
     
     if (botProcess) {
-      res.json({
-        success: true,
-        message: `Bot ${number} démarré`,
-        pid: botProcess.pid
-      });
+      res.json({ success: true, message: "Bot démarré", pid: botProcess.pid });
     } else {
-      res.status(500).json({
-        success: false,
-        error: "Impossible de démarrer le bot"
-      });
+      res.status(500).json({ success: false, error: "Erreur démarrage" });
     }
     
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 🛑 Arrêter bot
+app.post("/stop-bot/:number", async (req, res) => {
+  try {
+    const { number } = req.params;
+    
+    if (botProcesses.has(number)) {
+      const process = botProcesses.get(number);
+      process.kill('SIGTERM');
+      botProcesses.delete(number);
+      res.json({ success: true, message: "Bot arrêté" });
+    } else {
+      res.status(404).json({ success: false, error: "Bot non trouvé" });
+    }
+    
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -562,7 +445,7 @@ app.get("/active-bots", (req, res) => {
         number: number,
         connected: bot.connected,
         botRunning: botProcesses.has(number),
-        hasSession: true,
+        botPid: bot.botPid,
         timestamp: bot.timestamp
       });
     });
@@ -576,44 +459,102 @@ app.get("/active-bots", (req, res) => {
     });
     
   } catch (error) {
+    res.json({ success: true, activeBots: [], count: 0 });
+  }
+});
+
+// 📈 Statistiques
+app.get("/stats", (req, res) => {
+  const memory = process.memoryUsage();
+  
+  res.json({
+    success: true,
+    stats: {
+      server_status: "online",
+      baileys_status: baileysAvailable ? "loaded" : "not_loaded",
+      uptime: Math.floor(process.uptime()),
+      active_bots: activeBots.size,
+      bots_running: botProcesses.size,
+      memory_usage: Math.round(memory.heapUsed / 1024 / 1024) + "MB",
+      platform: process.platform,
+      node_version: process.version,
+      timestamp: new Date().toISOString()
+    }
+  });
+});
+
+// 🗑️ Supprimer session
+app.delete("/delete-session/:number", async (req, res) => {
+  try {
+    const { number } = req.params;
+    
+    // Arrêter bot
+    if (botProcesses.has(number)) {
+      const process = botProcesses.get(number);
+      process.kill('SIGTERM');
+      botProcesses.delete(number);
+    }
+    
+    // Supprimer session
+    const sessionId = number.replace(/[^0-9]/g, '');
+    const sessionPath = path.join(SESSIONS_DIR, sessionId);
+    
+    let deleted = false;
+    if (fs.existsSync(sessionPath)) {
+      fs.rmSync(sessionPath, { recursive: true, force: true });
+      deleted = true;
+    }
+    
+    // Supprimer de la liste
+    activeBots.delete(number);
+    
     res.json({
       success: true,
-      activeBots: [],
-      count: 0
+      deleted: deleted,
+      message: deleted ? "Session supprimée" : "Session non trouvée"
     });
+    
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // 🚀 Démarrer serveur
 async function startServer() {
-  console.log("\n" + "=".repeat(60));
-  console.log("🚀 DÉMARRAGE SERVEUR WHATSAPP BOT");
-  console.log("=".repeat(60));
-  
   await loadBaileys();
   
   app.listen(PORT, () => {
-    console.log(`\n✅ SERVEUR ACTIF`);
-    console.log(`📍 Port: ${PORT}`);
-    console.log(`🌐 URL: http://localhost:${PORT}`);
-    console.log(`🖥️  Panel: http://localhost:${PORT}/panel`);
-    console.log(`🤖 Bot: ${fs.existsSync(BOT_INDEX_PATH) ? '✅ PRÊT' : '❌ MANQUANT'}`);
-    console.log(`📱 WhatsApp: ${baileysAvailable ? '✅ CONNECTÉ' : '❌ HORS LIGNE'}`);
-    console.log("\n" + "=".repeat(60));
+    console.log(`
+╔══════════════════════════════════════════════════════╗
+║           WHATSAPP BOT SERVER - RENDER.COM          ║
+╠══════════════════════════════════════════════════════╣
+║ 🚀 Serveur actif sur le port ${PORT}                     ║
+║ 🌍 Votre URL Render: (configurée automatiquement)   ║
+║ 🤖 Bot: ${fs.existsSync(BOT_INDEX_PATH) ? '✅ PRÊT' : '❌ MANQUANT'}      ║
+║ 📱 WhatsApp: ${baileysAvailable ? '✅ ACTIF' : '❌ HORS LIGNE'}         ║
+║ 🔥 Démarrage auto bot: ACTIVÉ                       ║
+║ 📊 Accédez à: /panel pour l'interface               ║
+╚══════════════════════════════════════════════════════╝
+    `);
+    
+    // Afficher l'URL Render (si disponible)
+    if (process.env.RENDER_EXTERNAL_URL) {
+      console.log(`\n🌐 Votre URL Render: ${process.env.RENDER_EXTERNAL_URL}`);
+      console.log(`🖥️  Panel: ${process.env.RENDER_EXTERNAL_URL}/panel`);
+    } else if (process.env.RENDER) {
+      console.log(`\n⚠️  URL Render détectée mais non disponible`);
+      console.log(`   Elle sera visible dans le dashboard Render`);
+    }
   });
 }
 
 // Gestion erreurs
 process.on('uncaughtException', (err) => {
-  console.error('💥 ERREUR NON GÉRÉE:', err.message);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('⚠️ PROMISE REJECTED:', reason);
+  console.error('💥 Erreur non gérée:', err.message);
 });
 
 // Démarrer
 startServer().catch(err => {
-  console.error('💥 ERREUR DÉMARRAGE:', err);
+  console.error('💥 Erreur démarrage:', err);
   process.exit(1);
 });
