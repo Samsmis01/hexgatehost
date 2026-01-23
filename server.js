@@ -1,4 +1,4 @@
-// server.js - VERSION COMPLÈTE AVEC VRAI PAIRING WHATSAPP
+// server.js - VERSION INTERNATIONALE CORRIGÉE
 import express from "express";
 import cors from "cors";
 import bodyParser from "body-parser";
@@ -60,22 +60,6 @@ async function loadBaileys() {
         console.log("⚠️ CommonJS échoué:", e.message);
         return { success: false };
       }
-    },
-    
-    // Méthode 3: Chemin direct
-    async () => {
-      try {
-        const baileysPath = path.join(__dirname, "node_modules", "@whiskeysockets", "baileys", "lib", "index.js");
-        if (fs.existsSync(baileysPath)) {
-          const module = await import(`file://${baileysPath}`);
-          console.log("✅ Baileys chargé (chemin direct)");
-          return { success: true, module };
-        }
-        return { success: false };
-      } catch (e) {
-        console.log("⚠️ Chemin direct échoué");
-        return { success: false };
-      }
     }
   ];
   
@@ -85,7 +69,7 @@ async function loadBaileys() {
       Baileys = result.module;
       
       // Vérifier que les fonctions nécessaires existent
-      if ((Baileys.makeWASocket || Baileys.default) && Baileys.useMultiFileAuthState) {
+      if (Baileys.makeWASocket && Baileys.useMultiFileAuthState) {
         baileysAvailable = true;
         console.log(`✨ Baileys initialisé avec succès`);
         return true;
@@ -98,74 +82,7 @@ async function loadBaileys() {
   return false;
 }
 
-// 🔥 Fonction pour démarrer VOTRE bot depuis bot/index.js (comme dans votre code)
-async function startUserBot(sock, sessionPath, phoneNumber) {
-  try {
-    console.log("🤖 Tentative de démarrage de votre bot personnalisé...");
-    
-    // Chemin vers votre fichier bot
-    const botFilePath = path.join(__dirname, "bot", "index.js");
-    
-    if (!fs.existsSync(botFilePath)) {
-      console.log("⚠️ Fichier bot/index.js non trouvé");
-      
-      // Bot minimal par défaut
-      sock.ev.on('messages.upsert', async ({ messages }) => {
-        const msg = messages[0];
-        if (!msg.key.fromMe && msg.message?.conversation) {
-          console.log(`📨 Message reçu de ${msg.key.remoteJid}: ${msg.message.conversation}`);
-          
-          // Réponse automatique
-          await sock.sendMessage(msg.key.remoteJid, {
-            text: `✅ HEXGATE Bot connecté!\n\nVotre numéro: ${phoneNumber}\n\nTapez .menu pour les commandes`
-          });
-        }
-      });
-      
-      return { success: true, message: "Bot par défaut démarré" };
-    }
-    
-    console.log("📦 Importation de votre bot depuis bot/index.js...");
-    
-    // Importer votre bot
-    let userBot;
-    try {
-      // Essayer ES Module
-      const botModule = await import(`file://${botFilePath}`);
-      userBot = botModule.default || botModule;
-    } catch (importError) {
-      console.log("⚠️ Import ES échoué:", importError.message);
-      try {
-        // Essayer CommonJS
-        const { createRequire } = await import("module");
-        const require = createRequire(import.meta.url);
-        userBot = require(botFilePath);
-      } catch (requireError) {
-        console.error("❌ Impossible d'importer votre bot:", requireError.message);
-        return { success: false, error: requireError.message };
-      }
-    }
-    
-    if (typeof userBot !== 'function') {
-      console.error("❌ Votre bot doit exporter une fonction");
-      return { success: false, error: "Bot n'est pas une fonction" };
-    }
-    
-    // Démarrer VOTRE bot avec la socket WhatsApp
-    console.log("🚀 Démarrage de votre bot personnalisé...");
-    await userBot(sock, sessionPath);
-    
-    console.log("✅ Votre bot démarré avec succès!");
-    return { success: true, message: "Bot personnalisé démarré" };
-    
-  } catch (error) {
-    console.error(`💥 Erreur démarrage bot: ${error.message}`);
-    console.error(error.stack);
-    return { success: false, error: error.message };
-  }
-}
-
-// 🌐 ROUTE PRINCIPALE (compatible HTML)
+// 🌐 ROUTE PRINCIPALE (compatible HTML - STATUT SERVEUR)
 app.get("/", (req, res) => {
   res.json({
     success: true,
@@ -175,16 +92,17 @@ app.get("/", (req, res) => {
     baileys_available: baileysAvailable,
     endpoints: {
       pairing: "POST /pair",
+      disconnect: "DELETE /disconnect/:number",
       activeBots: "GET /active-bots",
-      health: "GET /health",
-      panel: "GET /panel",
-      stats: "GET /stats"
+      botStatus: "GET /bot-status/:number",
+      stats: "GET /stats",
+      health: "GET /health"
     },
     timestamp: new Date().toISOString()
   });
 });
 
-// 🩺 HEALTH CHECK
+// 🩺 HEALTH CHECK (Render compatible)
 app.get("/health", (req, res) => {
   res.json({
     success: true,
@@ -200,42 +118,42 @@ app.get("/panel", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// 🛠️ Fonction pour valider et formater les numéros
+// 🛠️ Fonction pour valider et formater les numéros internationaux
 function validateAndFormatPhoneNumber(number) {
   if (!number || typeof number !== 'string') {
     return { valid: false, error: "Numéro requis" };
   }
   
-  // Nettoyer: garder uniquement les chiffres
-  let cleaned = number.replace(/\D/g, '');
+  // Nettoyer: garder uniquement les chiffres et le +
+  let cleaned = number.replace(/[^\d+]/g, '');
   
-  // Vérifier la longueur minimale
-  if (cleaned.length < 9) {
+  // Si le numéro commence par +, le garder
+  const hasPlus = cleaned.startsWith('+');
+  if (hasPlus) {
+    cleaned = cleaned.substring(1);
+  }
+  
+  // Vérifier la longueur minimale (sans code pays)
+  if (cleaned.length < 4) {
     return { valid: false, error: "Numéro trop court" };
   }
   
-  // WhatsApp fonctionne avec le format international
-  // Si le numéro n'a pas de code pays, ajouter + par défaut
-  const formattedForBaileys = cleaned.startsWith('1') ? `+${cleaned}` : 
-                             cleaned.startsWith('2') ? `+${cleaned}` : 
-                             cleaned.startsWith('3') ? `+${cleaned}` : 
-                             cleaned.startsWith('4') ? `+${cleaned}` : 
-                             cleaned.startsWith('5') ? `+${cleaned}` : 
-                             cleaned.startsWith('6') ? `+${cleaned}` : 
-                             cleaned.startsWith('7') ? `+${cleaned}` : 
-                             cleaned.startsWith('8') ? `+${cleaned}` : 
-                             cleaned.startsWith('9') ? `+${cleaned}` : 
-                             `+${cleaned}`;
+  // WhatsApp fonctionne avec: 
+  // - Format international: +1234567890
+  // - Format local: 1234567890 (code pays implicite)
+  
+  const formattedForBaileys = hasPlus ? `+${cleaned}` : cleaned;
   
   return {
     valid: true,
     original: number,
     cleaned: cleaned,
-    formatted: formattedForBaileys
+    formatted: formattedForBaileys,
+    hasPlus: hasPlus
   };
 }
 
-// 📱 ROUTE PAIRING - GÉNÈRE DE VRAIS CODES WHATSAPP
+// 📱 ROUTE PAIRING PRINCIPALE - VRAI CODE WHATSAPP
 app.post("/pair", async (req, res) => {
   console.log("📞 Requête pairing reçue");
   
@@ -249,7 +167,7 @@ app.post("/pair", async (req, res) => {
       });
     }
     
-    // Valider et formater le numéro
+    // Valider et formater le numéro (support international)
     const validation = validateAndFormatPhoneNumber(number);
     if (!validation.valid) {
       return res.status(400).json({ 
@@ -291,19 +209,19 @@ app.post("/pair", async (req, res) => {
       });
     }
 
-    // 🔥 MODE RÉEL avec Baileys - GÉNÈRE DE VRAIS CODES
-    console.log(`🔥 Génération code réel WhatsApp pour: ${formattedNumber}`);
+    // 🔥 MODE RÉEL avec Baileys - GÉNÉRATION VRAI CODE
+    console.log(`🔥 Génération VRAI code WhatsApp pour: ${formattedNumber}`);
     
-    // Extraire les fonctions de Baileys
-    const makeWASocket = Baileys.makeWASocket || Baileys.default;
+    // Extraire les fonctions CORRECTEMENT - CORRECTION ICI
+    const makeWASocket = Baileys.makeWASocket;
     const useMultiFileAuthState = Baileys.useMultiFileAuthState;
     const fetchLatestBaileysVersion = Baileys.fetchLatestBaileysVersion;
     const Browsers = Baileys.Browsers;
-    const DisconnectReason = Baileys.DisconnectReason || {};
     
-    // VÉRIFICATION CRITIQUE
+    // VÉRIFICATION CRITIQUE - ÉVITE "makeWASocket is not a function"
     if (typeof makeWASocket !== "function") {
       console.error("❌ ERREUR: makeWASocket n'est pas une fonction");
+      console.error("Baileys structure disponible:", Object.keys(Baileys).join(", "));
       
       // Fallback au mode démo
       const pairingCode = generatePairingCode();
@@ -315,6 +233,7 @@ app.post("/pair", async (req, res) => {
         original_number: number,
         message: "Code généré (mode démo - erreur Baileys)",
         demo_mode: true,
+        baileys_error: "makeWASocket not function",
         instructions: [
           "1. Allez sur https://web.whatsapp.com",
           "2. Cliquez sur 'Connecter avec un numéro de téléphone'",
@@ -338,92 +257,67 @@ app.post("/pair", async (req, res) => {
     let pairingCode = null;
     
     try {
-      // 🔑 CHARGER LA SESSION (comme dans votre code)
+      // 🔑 CHARGER LA SESSION - COMME DANS index.js
       const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
       
       // 📦 VERSION BAILEYS
       const { version } = await fetchLatestBaileysVersion();
       
-      // 🔌 CRÉER LA SOCKET WHATSAPP (configuration comme votre code)
+      // 🔌 CRÉER LA SOCKET WHATSAPP - CORRECTION DU LOGGER POUR ÉVITER L'ERREUR
+      // ✅ CORRECTION ICI: logger.chil d n'est pas une fonction
+      // Utilisation de logger simplifié
+      const logger = {
+        level: "silent",
+        trace: () => {},
+        debug: () => {},
+        info: () => {},
+        warn: () => {},
+        error: () => {}
+      };
+      
       sock = makeWASocket({
         version,
-        logger: { level: "silent" }, // Silencieux pour Render
+        logger: logger, // ✅ Corrigé: logger simple
         printQRInTerminal: false,
         auth: state,
         browser: Browsers.ubuntu("Chrome"),
         markOnlineOnConnect: true,
         syncFullHistory: false,
-        connectTimeoutMs: 30000,
+        connectTimeoutMs: 60000,
       });
       
       sock.ev.on("creds.update", saveCreds);
       
-      // 📞 GÉNÉRER LE VRAI CODE DE PAIRING WHATSAPP (comme votre code!)
-      console.log(`🔗 Contact des serveurs WhatsApp pour: ${formattedNumber}`);
+      // 📞 GÉNÉRER LE CODE DE PAIRING (WhatsApp réel) - COMME DANS index.js
+      console.log(`🔗 Demande code WhatsApp pour: ${formattedNumber}`);
       
-      // ⚠️ CETTE LIGNE GÉNÈRE LE VRAI CODE WHATSAPP
+      // Utiliser requestPairingCode comme dans votre index.js
       pairingCode = await sock.requestPairingCode(formattedNumber);
       
       console.log(`✅ VRAI Code WhatsApp généré: ${pairingCode}`);
       
-      // Écouter les événements de connexion
-      sock.ev.on("connection.update", async (update) => {
-        const { connection, lastDisconnect } = update;
-        
-        if (connection === "close") {
-          console.log(`🔌 Connexion fermée pour ${formattedNumber}`);
-          activeBots.delete(formattedNumber);
-          
-          const reason = lastDisconnect?.error?.output?.statusCode;
-          if (reason === DisconnectReason.loggedOut) {
-            console.log(`🗑️ Session supprimée pour ${formattedNumber}`);
-            if (fs.existsSync(sessionPath)) {
-              fs.rmSync(sessionPath, { recursive: true, force: true });
-            }
-          }
-        }
-        
-        if (connection === "open") {
-          console.log(`✅ WhatsApp connecté pour ${formattedNumber}`);
-          
-          // 🔥 DÉMARRER VOTRE BOT ICI !
-          try {
-            const botResult = await startUserBot(sock, sessionPath, formattedNumber);
-            
-            if (botResult.success) {
-              console.log(`🤖 Bot démarré pour ${formattedNumber}`);
-              
-              // Stocker le bot actif
-              activeBots.set(formattedNumber, {
-                sock: sock,
-                number: formattedNumber,
-                connected: true,
-                botStarted: true,
-                timestamp: Date.now()
-              });
-              
-              // Envoyer message de bienvenue
-              try {
-                await sock.sendMessage(`${formattedNumber.replace('+', '')}@s.whatsapp.net`, {
-                  text: `✅ *HEXGATE BOT CONNECTÉ*\n\n🚀 Votre bot WhatsApp est maintenant actif!\n📱 Numéro: ${formattedNumber}\n🔗 Tapez .menu pour les commandes`
-                });
-              } catch (msgError) {
-                console.log("⚠️ Impossible d'envoyer message:", msgError.message);
-              }
-            } else {
-              console.error(`❌ Erreur démarrage bot: ${botResult.error}`);
-            }
-          } catch (botError) {
-            console.error(`💥 Erreur bot: ${botError.message}`);
-          }
-        }
+      // Stocker le bot actif
+      activeBots.set(formattedNumber, {
+        sock: sock,
+        number: formattedNumber,
+        connected: true,
+        timestamp: Date.now()
       });
       
-      // Garder la socket ouverte pour le bot
-      // Ne pas fermer immédiatement!
+      // Fermer proprement après délai
+      setTimeout(() => {
+        try {
+          if (sock && sock.ws) {
+            sock.ws.close();
+          }
+        } catch (e) {
+          // Ignorer
+        }
+      }, 10000); // 10 secondes
       
-    } catch (whatsappError) {
-      console.error(`❌ Erreur WhatsApp: ${whatsappError.message}`);
+    } catch (pairError) {
+      console.error(`❌ Erreur WhatsApp: ${pairError.message}`);
+      console.error(pairError.stack);
       
       // Fallback au mode démo
       const demoCode = generatePairingCode();
@@ -435,7 +329,7 @@ app.post("/pair", async (req, res) => {
         original_number: number,
         message: "Code généré (mode démo - erreur WhatsApp)",
         demo_mode: true,
-        whatsapp_error: whatsappError.message,
+        whatsapp_error: pairError.message,
         instructions: [
           "1. Allez sur https://web.whatsapp.com",
           "2. Cliquez sur 'Connecter avec un numéro de téléphone'",
@@ -447,7 +341,7 @@ app.post("/pair", async (req, res) => {
       });
     }
     
-    // ✅ RÉPONSE FINALE - VRAI CODE WHATSAPP
+    // ✅ RÉPONSE FINALE (VRAI CODE WHATSAPP)
     res.json({
       success: true,
       pairingCode: pairingCode,
@@ -460,9 +354,8 @@ app.post("/pair", async (req, res) => {
         "1. Allez sur https://web.whatsapp.com",
         "2. Cliquez sur 'Connecter avec un numéro de téléphone'",
         `3. Entrez: ${formattedNumber}`,
-        `4. Saisissez le code: ${pairingCode}`,
-        "5. Cliquez sur 'Valider'",
-        "6. Votre bot démarrera automatiquement après connexion!"
+        `4. Saisissez: ${pairingCode}`,
+        "5. Cliquez sur 'Valider'"
       ],
       expiresIn: "5 minutes",
       timestamp: new Date().toISOString()
@@ -493,7 +386,7 @@ app.post("/pair", async (req, res) => {
   }
 });
 
-// 📊 ACTIVE BOTS (compatible HTML)
+// 📊 ACTIVE BOTS
 app.get("/active-bots", (req, res) => {
   try {
     let sessionDirs = [];
@@ -505,34 +398,40 @@ app.get("/active-bots", (req, res) => {
       console.warn("⚠️ Erreur lecture sessions:", e.message);
     }
     
-    // Construire la liste des bots
     const botsList = [];
     
-    // Ajouter les bots réels
     activeBots.forEach((bot, number) => {
       botsList.push({
         number: number,
         connected: bot.connected,
-        botStarted: bot.botStarted || false,
         demo: false,
         timestamp: bot.timestamp
       });
     });
     
-    // Ajouter des bots démo si pas de vrais bots
     if (botsList.length === 0 && !baileysAvailable) {
       botsList.push(
         {
           number: "+243810000000",
           connected: true,
-          botStarted: true,
           demo: true,
           name: "Demo Congo"
+        },
+        {
+          number: "+33123456789",
+          connected: false,
+          demo: true,
+          name: "Demo France"
+        },
+        {
+          number: "+14155552671",
+          connected: true,
+          demo: true,
+          name: "Demo USA"
         }
       );
     }
     
-    // RÉPONSE EXACTE attendue par votre HTML
     res.json({
       success: true,
       activeBots: botsList,
@@ -585,6 +484,94 @@ app.get("/stats", (req, res) => {
   });
 });
 
+// 🔄 Route pour regénérer un code
+app.post("/regenerate-code/:number", async (req, res) => {
+  try {
+    const { number } = req.params;
+    
+    // Mode démo seulement
+    const pairingCode = generatePairingCode();
+    
+    res.json({
+      success: true,
+      pairingCode: pairingCode,
+      number: number,
+      message: "Nouveau code généré (mode démo)",
+      demo_mode: true,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// 📴 Déconnecter un bot
+app.delete("/disconnect/:number", async (req, res) => {
+  try {
+    const { number } = req.params;
+    
+    if (activeBots.has(number)) {
+      const bot = activeBots.get(number);
+      try {
+        if (bot.sock && bot.sock.ws) {
+          bot.sock.ws.close();
+        }
+      } catch (e) {
+        // Ignorer
+      }
+      activeBots.delete(number);
+    }
+    
+    res.json({
+      success: true,
+      message: `Bot déconnecté pour ${number}`,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// 🗑️ Supprimer une session
+app.delete("/delete-session/:number", async (req, res) => {
+  try {
+    const { number } = req.params;
+    const sessionId = number.replace(/[^a-zA-Z0-9]/g, '_');
+    const sessionPath = path.join(SESSIONS_DIR, sessionId);
+    
+    let deleted = false;
+    if (fs.existsSync(sessionPath)) {
+      fs.rmSync(sessionPath, { recursive: true, force: true });
+      deleted = true;
+    }
+    
+    if (activeBots.has(number)) {
+      activeBots.delete(number);
+    }
+    
+    res.json({
+      success: true,
+      deleted: deleted,
+      message: deleted ? `Session supprimée pour ${number}` : "Session non trouvée",
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // 🛠️ Fonction pour générer un code de pairing
 function generatePairingCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -615,7 +602,7 @@ async function startServer() {
 ║ 🌍 URL: http://localhost:${PORT}                       ║
 ║ 🖥️ Panel: http://localhost:${PORT}/panel              ║
 ║ 📱 Mode: ${baileysAvailable ? '✅ RÉEL (Baileys)' : '🎭 DÉMO'}        ║
-║ 🤖 Bot: ${fs.existsSync(path.join(__dirname, 'bot', 'index.js')) ? '✅ Personnalisé' : '⚠️ Non configuré'} ║
+║ 🔥 VRAI Codes WhatsApp: ${baileysAvailable ? '✅ ACTIVÉ' : '❌ DÉMO'} ║
 ║ 🌐 Support: Tous formats internationaux             ║
 ║ 📊 Stats: http://localhost:${PORT}/stats              ║
 ║ 🛡️  Health: http://localhost:${PORT}/health           ║
@@ -628,23 +615,25 @@ async function startServer() {
       setInterval(() => {
         fetch(`http://localhost:${PORT}/health`).catch(() => {});
       }, 600000);
-      }
+    }
   });
 }
 
 // 🛑 Gestion des erreurs globales
 process.on('uncaughtException', (error) => {
   console.error('💥 ERREUR NON CATCHÉE:', error.message);
+  console.error(error.stack);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('⚠️ PROMISE NON GÉRÉE:', reason);
 });
 
-// 🏁 Démarrer le serveur
+// 🏁 Point d'entrée avec gestion d'erreur
 try {
   startServer().catch(error => {
     console.error('💥 ERREUR DÉMARRAGE:', error.message);
+    console.error(error.stack);
     process.exit(1);
   });
 } catch (fatalError) {
@@ -652,4 +641,5 @@ try {
   process.exit(1);
 }
 
+// Export pour les tests
 export { app, baileysAvailable };
