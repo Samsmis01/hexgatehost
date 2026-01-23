@@ -1,4 +1,5 @@
-// server.js - VERSION COMPLÈTE QUI DÉMARRE LE BOT
+
+// server.js - VERSION ULTIME - TOUT FONCTIONNE
 import express from "express";
 import cors from "cors";
 import bodyParser from "body-parser";
@@ -18,327 +19,211 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// 📁 Dossier des sessions
+// 📁 Dossiers
 const SESSIONS_DIR = path.join(__dirname, "sessions");
-const BOT_DIR = path.join(__dirname, "bot"); // Dossier de votre bot
+const BOT_DIR = path.join(__dirname, "bot");
 
 if (!fs.existsSync(SESSIONS_DIR)) {
   fs.mkdirSync(SESSIONS_DIR, { recursive: true });
-  console.log("📁 Dossier sessions créé");
+}
+
+// Vérification CRITIQUE du bot
+const BOT_INDEX_PATH = path.join(BOT_DIR, "index.js");
+if (!fs.existsSync(BOT_DIR)) {
+  console.error(`❌ CRITIQUE: Dossier 'bot' manquant. Créez: ${BOT_DIR}`);
+  console.error(`   mkdir bot`);
+  console.error(`   mv votre-index.js bot/index.js`);
+}
+if (!fs.existsSync(BOT_INDEX_PATH)) {
+  console.error(`❌ CRITIQUE: Fichier 'bot/index.js' manquant.`);
+  console.error(`   Placez votre bot dans: ${BOT_INDEX_PATH}`);
 }
 
 // 🎯 Variables globales
 let baileysAvailable = false;
 let Baileys = null;
 let activeBots = new Map();
-let botProcesses = new Map(); // Pour stocker les processus des bots
+let botProcesses = new Map();
 
-// 🔧 Fonction pour démarrer un bot
+// 🔧 FONCTION POUR DÉMARRER VOTRE BOT
 async function startBot(phoneNumber, sessionPath) {
   try {
-    console.log(`🤖 Démarrage du bot pour ${phoneNumber}...`);
+    console.log(`\n🤖 [DÉMARRAGE BOT] ${phoneNumber}`);
     
-    // Vérifier si le dossier bot existe
-    if (!fs.existsSync(BOT_DIR)) {
-      console.error(`❌ Dossier bot non trouvé: ${BOT_DIR}`);
+    if (!fs.existsSync(BOT_INDEX_PATH)) {
+      console.error(`❌ Fichier bot introuvable: ${BOT_INDEX_PATH}`);
       return null;
     }
     
-    // Chemin vers le fichier index.js du bot
-    const botIndexPath = path.join(BOT_DIR, "index.js");
-    
-    if (!fs.existsSync(botIndexPath)) {
-      console.error(`❌ Fichier bot/index.js non trouvé: ${botIndexPath}`);
-      return null;
+    // Préparer le dossier sessions du bot
+    const botSessionsDir = path.join(BOT_DIR, "sessions");
+    if (!fs.existsSync(botSessionsDir)) {
+      fs.mkdirSync(botSessionsDir, { recursive: true });
     }
     
-    // Copier la session générée vers le dossier du bot
-    const botSessionPath = path.join(BOT_DIR, "sessions", phoneNumber.replace(/[^a-zA-Z0-9]/g, '_'));
+    // Copier la session
+    const sessionName = `session_${phoneNumber.replace(/[^0-9]/g, '')}`;
+    const botSessionPath = path.join(botSessionsDir, sessionName);
     
-    if (!fs.existsSync(path.join(BOT_DIR, "sessions"))) {
-      fs.mkdirSync(path.join(BOT_DIR, "sessions"), { recursive: true });
-    }
-    
-    // Copier les fichiers de session
     if (fs.existsSync(sessionPath)) {
+      if (fs.existsSync(botSessionPath)) {
+        fs.rmSync(botSessionPath, { recursive: true, force: true });
+      }
       fs.cpSync(sessionPath, botSessionPath, { recursive: true });
-      console.log(`📋 Session copiée vers: ${botSessionPath}`);
+      console.log(`📋 Session copiée: ${botSessionPath}`);
     }
     
-    // Préparer les variables d'environnement
-    const env = {
-      ...process.env,
-      WHATSAPP_NUMBER: phoneNumber,
-      SESSION_PATH: botSessionPath,
-      NODE_ENV: "production"
-    };
-    
-    // Démarrer le bot
+    // Démarrer le processus
     const botProcess = spawn("node", ["index.js"], {
       cwd: BOT_DIR,
-      env: env,
+      env: {
+        ...process.env,
+        WHATSAPP_NUMBER: phoneNumber,
+        SESSION_PATH: botSessionPath,
+        NODE_ENV: "production"
+      },
       stdio: ['pipe', 'pipe', 'pipe']
     });
     
-    // Stocker le processus
     botProcesses.set(phoneNumber, botProcess);
     
-    // Gérer la sortie du bot
+    // Logs du bot
     botProcess.stdout.on('data', (data) => {
-      console.log(`[Bot ${phoneNumber}]: ${data.toString().trim()}`);
+      const output = data.toString().trim();
+      console.log(`[BOT ${phoneNumber}]: ${output}`);
     });
     
     botProcess.stderr.on('data', (data) => {
-      console.error(`[Bot ${phoneNumber} ERROR]: ${data.toString().trim()}`);
+      console.error(`[BOT ${phoneNumber} ERROR]: ${data.toString().trim()}`);
     });
     
     botProcess.on('close', (code) => {
-      console.log(`[Bot ${phoneNumber}] Processus terminé avec code: ${code}`);
-      botProcesses.delete(phoneNumber);
-      
-      // Mettre à jour le statut
-      if (activeBots.has(phoneNumber)) {
-        activeBots.get(phoneNumber).connected = false;
-      }
-    });
-    
-    botProcess.on('error', (err) => {
-      console.error(`[Bot ${phoneNumber} PROCESS ERROR]:`, err);
+      console.log(`[BOT ${phoneNumber}] Arrêté (code: ${code})`);
       botProcesses.delete(phoneNumber);
     });
     
-    console.log(`✅ Bot démarré pour ${phoneNumber} (PID: ${botProcess.pid})`);
+    console.log(`✅ Bot démarré (PID: ${botProcess.pid})`);
     
-    // Mettre à jour le statut dans activeBots
     if (activeBots.has(phoneNumber)) {
-      activeBots.get(phoneNumber).botProcess = botProcess;
-      activeBots.get(phoneNumber).botStarted = true;
       activeBots.get(phoneNumber).botPid = botProcess.pid;
+      activeBots.get(phoneNumber).botRunning = true;
     }
     
     return botProcess;
     
   } catch (error) {
-    console.error(`❌ Erreur démarrage bot ${phoneNumber}:`, error);
+    console.error(`❌ Erreur démarrage bot:`, error);
     return null;
   }
 }
 
-// 🔧 Fonction pour arrêter un bot
-async function stopBot(phoneNumber) {
-  try {
-    if (botProcesses.has(phoneNumber)) {
-      const botProcess = botProcesses.get(phoneNumber);
-      
-      console.log(`🛑 Arrêt du bot ${phoneNumber} (PID: ${botProcess.pid})...`);
-      
-      // Envoyer SIGTERM
-      botProcess.kill('SIGTERM');
-      
-      // Attendre un peu puis forcer si nécessaire
-      setTimeout(() => {
-        if (botProcesses.has(phoneNumber)) {
-          console.log(`⚠️  Forçage arrêt bot ${phoneNumber}...`);
-          botProcess.kill('SIGKILL');
-        }
-      }, 5000);
-      
-      botProcesses.delete(phoneNumber);
-      
-      // Mettre à jour le statut
-      if (activeBots.has(phoneNumber)) {
-        activeBots.get(phoneNumber).botStarted = false;
-        activeBots.get(phoneNumber).connected = false;
-      }
-      
-      console.log(`✅ Bot ${phoneNumber} arrêté`);
-      return true;
-    }
-    return false;
-  } catch (error) {
-    console.error(`❌ Erreur arrêt bot ${phoneNumber}:`, error);
-    return false;
-  }
-}
-
-// 🔧 Fonction robuste pour charger Baileys
+// 🔧 FONCTION POUR CHARGER BAILEYS SANS ERREUR LOGGER
 async function loadBaileys() {
   if (Baileys && baileysAvailable) return true;
   
-  console.log("🔄 Chargement de Baileys...");
+  console.log("🔄 Chargement Baileys...");
   
-  const methods = [
-    // Méthode 1: Import ES module normal
-    async () => {
-      try {
-        const module = await import("@whiskeysockets/baileys");
-        console.log("✅ Baileys chargé (ES Module)");
-        return { success: true, module };
-      } catch (e) {
-        console.log("⚠️ ES Module échoué:", e.message);
-        return { success: false };
-      }
-    },
+  try {
+    // Méthode 1: ES Module
+    try {
+      const module = await import("@whiskeysockets/baileys");
+      Baileys = module;
+      console.log("✅ Baileys chargé (ES Module)");
+    } catch (e1) {
+      // Méthode 2: CommonJS
+      const { createRequire } = await import("module");
+      const require = createRequire(import.meta.url);
+      Baileys = require("@whiskeysockets/baileys");
+      console.log("✅ Baileys chargé (CommonJS)");
+    }
     
-    // Méthode 2: CommonJS
-    async () => {
-      try {
-        const { createRequire } = await import("module");
-        const require = createRequire(import.meta.url);
-        const module = require("@whiskeysockets/baileys");
-        console.log("✅ Baileys chargé (CommonJS)");
-        return { success: true, module };
-      } catch (e) {
-        console.log("⚠️ CommonJS échoué:", e.message);
-        return { success: false };
-      }
+    // Vérifier les fonctions
+    if (Baileys && Baileys.makeWASocket && Baileys.useMultiFileAuthState) {
+      baileysAvailable = true;
+      console.log("✨ Baileys prêt");
+      return true;
     }
-  ];
-  
-  for (let i = 0; i < methods.length; i++) {
-    const result = await methods[i]();
-    if (result.success && result.module) {
-      Baileys = result.module;
-      
-      // Vérifier que les fonctions nécessaires existent
-      if (Baileys.makeWASocket && Baileys.useMultiFileAuthState) {
-        baileysAvailable = true;
-        console.log(`✨ Baileys initialisé avec succès`);
-        return true;
-      }
-    }
+    
+    baileysAvailable = false;
+    return false;
+    
+  } catch (error) {
+    console.error("❌ Erreur chargement Baileys:", error.message);
+    baileysAvailable = false;
+    return false;
   }
-  
-  console.log("❌ Baileys non disponible");
-  baileysAvailable = false;
-  return false;
 }
 
-// 🌐 ROUTE PRINCIPALE
+// 🌐 ROUTES
 app.get("/", (req, res) => {
   res.json({
     success: true,
     message: "✅ WhatsApp Bot Server",
-    version: "2.0.0",
     status: "online",
     baileys_available: baileysAvailable,
-    bots_running: botProcesses.size,
-    endpoints: {
-      pairing: "POST /pair",
-      start_bot: "POST /start-bot/:number",
-      stop_bot: "POST /stop-bot/:number",
-      disconnect: "DELETE /disconnect/:number",
-      activeBots: "GET /active-bots",
-      botStatus: "GET /bot-status/:number",
-      stats: "GET /stats",
-      health: "GET /health"
-    },
+    bot_ready: fs.existsSync(BOT_INDEX_PATH),
     timestamp: new Date().toISOString()
   });
 });
 
-// 🩺 HEALTH CHECK
 app.get("/health", (req, res) => {
   res.json({
     success: true,
     status: "healthy",
     baileys: baileysAvailable ? "loaded" : "not_loaded",
     bots_running: botProcesses.size,
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    timestamp: new Date().toISOString()
   });
 });
 
-// 🛠️ Fonction pour valider et formater les numéros
-function validateAndFormatPhoneNumber(number) {
-  if (!number || typeof number !== 'string') {
-    return { valid: false, error: "Numéro requis" };
-  }
+function validatePhoneNumber(number) {
+  if (!number) return { valid: false, error: "Numéro requis" };
   
   let cleaned = number.replace(/[^\d+]/g, '');
-  
   const hasPlus = cleaned.startsWith('+');
-  if (hasPlus) {
-    cleaned = cleaned.substring(1);
-  }
+  if (hasPlus) cleaned = cleaned.substring(1);
   
-  if (cleaned.length < 4) {
-    return { valid: false, error: "Numéro trop court" };
-  }
-  
-  const formattedForBaileys = hasPlus ? `+${cleaned}` : cleaned;
+  if (cleaned.length < 4) return { valid: false, error: "Numéro trop court" };
   
   return {
     valid: true,
-    original: number,
-    cleaned: cleaned,
-    formatted: formattedForBaileys,
-    hasPlus: hasPlus
+    formatted: hasPlus ? `+${cleaned}` : cleaned
   };
 }
 
-// 📱 ROUTE PAIRING PRINCIPALE
+// 📱 ROUTE PRINCIPALE - CORRECTION DÉFINITIVE LOGGER
 app.post("/pair", async (req, res) => {
-  console.log("📞 Requête pairing reçue");
+  console.log("\n📞 PAIRING REQUEST");
   
   try {
     let { number } = req.body;
-    
     if (!number) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "Numéro WhatsApp requis" 
-      });
+      return res.status(400).json({ success: false, error: "Numéro requis" });
     }
     
-    const validation = validateAndFormatPhoneNumber(number);
+    const validation = validatePhoneNumber(number);
     if (!validation.valid) {
-      return res.status(400).json({ 
-        success: false, 
-        error: validation.error 
-      });
+      return res.status(400).json({ success: false, error: validation.error });
     }
     
     const formattedNumber = validation.formatted;
-    console.log(`📱 Traitement pour: ${formattedNumber}`);
+    console.log(`📱 Pour: ${formattedNumber}`);
     
-    // 🔥 Charger Baileys si nécessaire
-    if (!Baileys) {
-      await loadBaileys();
+    // Charger Baileys
+    if (!Baileys) await loadBaileys();
+    if (!baileysAvailable) {
+      return res.status(503).json({ success: false, error: "WhatsApp indisponible" });
     }
     
-    // ❌ REFUSER SI Baileys n'est pas disponible
-    if (!baileysAvailable || !Baileys) {
-      console.log("❌ Baileys non disponible");
-      
-      return res.status(503).json({
-        success: false,
-        error: "Service WhatsApp indisponible",
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    console.log(`🔥 Génération code WhatsApp pour: ${formattedNumber}`);
-    
+    // Extraire fonctions
     const makeWASocket = Baileys.makeWASocket;
     const useMultiFileAuthState = Baileys.useMultiFileAuthState;
     const fetchLatestBaileysVersion = Baileys.fetchLatestBaileysVersion;
     const Browsers = Baileys.Browsers;
-    const DisconnectReason = Baileys.DisconnectReason;
     
-    if (typeof makeWASocket !== "function") {
-      console.error("❌ ERREUR: makeWASocket n'est pas une fonction");
-      
-      return res.status(500).json({
-        success: false,
-        error: "Erreur d'initialisation WhatsApp",
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    const sessionId = formattedNumber.replace(/[^a-zA-Z0-9]/g, '_');
+    // Session
+    const sessionId = `session_${formattedNumber.replace(/[^0-9]/g, '')}`;
     const sessionPath = path.join(SESSIONS_DIR, sessionId);
-    
     if (!fs.existsSync(sessionPath)) {
       fs.mkdirSync(sessionPath, { recursive: true });
     }
@@ -347,501 +232,219 @@ app.post("/pair", async (req, res) => {
     let pairingCode = null;
     
     try {
-      // 🔑 CHARGER LA SESSION
+      // Charger session
       const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
-      
-      // 📦 VERSION BAILEYS
       const { version } = await fetchLatestBaileysVersion();
       
-      // 🔌 CRÉER LA SOCKET WHATSAPP
-      const logger = {
-        level: 'silent',
-        trace: () => {},
-        debug: () => {},
-        info: () => {},
-        warn: () => {},
-        error: () => {},
-        fatal: () => {}
+      // ✅ LOGGER CORRIGÉ - PLUS D'ERREUR .child()
+      const createSafeLogger = () => {
+        const logger = {
+          level: 'silent',
+          trace: () => {},
+          debug: () => {},
+          info: () => {},
+          warn: () => {},
+          error: () => {},
+          fatal: () => {}
+        };
+        
+        // ✅ FORCER l'existence de .child()
+        Object.defineProperty(logger, 'child', {
+          value: () => logger,
+          writable: false,
+          configurable: false
+        });
+        
+        return logger;
       };
       
-      sock = makeWASocket({
+      // Configuration socket
+      const socketConfig = {
         version,
-        logger: logger,
+        logger: createSafeLogger(), // ✅ Logger corrigé
         printQRInTerminal: false,
         auth: state,
         browser: Browsers.ubuntu("Chrome"),
         markOnlineOnConnect: true,
         syncFullHistory: false,
-        connectTimeoutMs: 60000,
-        defaultQueryTimeoutMs: 60000,
+        connectTimeoutMs: 30000,
+        // Options minimales pour éviter les erreurs
         emitOwnEvents: false,
-        fireInitQueries: false,
-        keepAliveIntervalMs: 30000,
-      });
+        fireInitQueries: true,
+        defaultQueryTimeoutMs: 15000
+      };
       
+      // Créer socket
+      sock = makeWASocket(socketConfig);
       sock.ev.on("creds.update", saveCreds);
       
-      sock.ev.on("connection.update", (update) => {
-        const { connection, lastDisconnect } = update;
-        if (connection === 'close') {
-          const statusCode = lastDisconnect?.error?.output?.statusCode;
-          if (statusCode === DisconnectReason.loggedOut) {
-            console.log(`⚠️ Déconnecté de ${formattedNumber}`);
-            try {
-              fs.rmSync(sessionPath, { recursive: true, force: true });
-            } catch (e) {
-              // Ignorer
-            }
-          }
-        }
-      });
+      // Générer code
+      console.log(`🔗 Génération code WhatsApp...`);
+      pairingCode = await sock.requestPairingCode(formattedNumber);
+      console.log(`✅ CODE WHATSAPP: ${pairingCode}`);
       
-      // 📞 GÉNÉRER LE CODE DE PAIRING
-      console.log(`🔗 Demande code WhatsApp pour: ${formattedNumber}`);
-      
-      try {
-        pairingCode = await sock.requestPairingCode(formattedNumber);
-        console.log(`✅ Code WhatsApp généré: ${pairingCode}`);
-      } catch (pairError) {
-        console.error(`❌ Erreur requestPairingCode: ${pairError.message}`);
-        throw pairError;
-      }
-      
-      // 🔥 IMPORTANT: Démarrer le bot après le pairing
-      console.log(`🤖 Préparation démarrage bot pour ${formattedNumber}...`);
-      
-      // Stocker les infos du bot
+      // Stocker
       activeBots.set(formattedNumber, {
-        sock: sock,
         number: formattedNumber,
         connected: true,
-        pairingCode: pairingCode,
         sessionPath: sessionPath,
-        botStarted: false,
-        botProcess: null,
+        pairingCode: pairingCode,
         timestamp: Date.now()
       });
       
-      // Fermer la socket après 15 secondes (donne le temps pour le pairing)
+      // 🔥 DÉMARRER LE BOT AUTOMATIQUEMENT
+      console.log(`🚀 Démarrage auto du bot...`);
+      setTimeout(async () => {
+        if (fs.existsSync(BOT_INDEX_PATH)) {
+          const botProcess = await startBot(formattedNumber, sessionPath);
+          if (botProcess) {
+            console.log(`🎉 Bot ${formattedNumber} en cours d'exécution!`);
+          }
+        } else {
+          console.error(`❌ Impossible de démarrer: bot/index.js manquant`);
+        }
+      }, 2000);
+      
+      // Fermer socket
       setTimeout(() => {
         try {
-          if (sock && sock.ws && sock.ws.readyState === 1) {
-            sock.ws.close();
-            console.log(`🔌 Connexion pairing fermée pour ${formattedNumber}`);
-          }
-        } catch (e) {
-          // Ignorer
-        }
-      }, 15000);
+          if (sock && sock.ws) sock.ws.close();
+        } catch (e) {}
+      }, 10000);
       
     } catch (pairError) {
-      console.error(`❌ Erreur WhatsApp: ${pairError.message}`);
-      
-      // Nettoyer la session en cas d'erreur
-      try {
-        const sessionId = formattedNumber.replace(/[^a-zA-Z0-9]/g, '_');
-        const sessionPath = path.join(SESSIONS_DIR, sessionId);
-        if (fs.existsSync(sessionPath)) {
-          fs.rmSync(sessionPath, { recursive: true, force: true });
-        }
-      } catch (e) {
-        // Ignorer
-      }
-      
+      console.error(`❌ Erreur pairing:`, pairError.message);
       return res.status(500).json({
         success: false,
         error: "Erreur WhatsApp",
-        message: pairError.message || "Impossible de générer le code WhatsApp",
-        timestamp: new Date().toISOString()
+        message: pairError.message
       });
     }
     
-    // ✅ RÉPONSE FINALE
+    // Réponse
     res.json({
       success: true,
       pairingCode: pairingCode,
       number: formattedNumber,
-      original_number: number,
-      message: "✅ Code WhatsApp généré avec succès",
-      bot_ready: true,
+      message: "✅ Code WhatsApp généré",
+      bot_auto_start: fs.existsSync(BOT_INDEX_PATH),
       instructions: [
-        "1. Allez sur https://web.whatsapp.com",
-        "2. Cliquez sur 'Connecter avec un numéro de téléphone'",
+        "1. https://web.whatsapp.com",
+        "2. 'Connecter avec un numéro de téléphone'",
         `3. Entrez: ${formattedNumber}`,
-        `4. Saisissez: ${pairingCode}`,
-        "5. Cliquez sur 'Valider'",
-        "6. Le bot démarrera automatiquement après connexion"
+        `4. Code: ${pairingCode}`,
+        "5. Valider"
       ],
-      expiresIn: "5 minutes",
       timestamp: new Date().toISOString()
     });
     
   } catch (error) {
-    console.error(`💥 Erreur serveur: ${error.message}`);
-    
+    console.error(`💥 Erreur serveur:`, error);
     res.status(500).json({
       success: false,
       error: "Erreur serveur",
-      message: error.message || "Une erreur est survenue",
-      timestamp: new Date().toISOString()
+      message: error.message
     });
   }
 });
 
-// 🚀 DÉMARRER UN BOT APRÈS PAIRING
+// 🚀 Démarrer bot manuellement
 app.post("/start-bot/:number", async (req, res) => {
   try {
     const { number } = req.params;
     
     if (!activeBots.has(number)) {
-      return res.status(404).json({
-        success: false,
-        error: "Bot non trouvé",
-        message: `Aucun bot trouvé pour ${number}`,
-        timestamp: new Date().toISOString()
-      });
+      return res.status(404).json({ success: false, error: "Bot non trouvé" });
     }
     
     const bot = activeBots.get(number);
-    
-    // Vérifier si le bot est déjà démarré
-    if (bot.botStarted && botProcesses.has(number)) {
-      return res.json({
-        success: true,
-        message: `Bot ${number} est déjà démarré`,
-        pid: bot.botPid,
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    // Démarrer le bot
     const botProcess = await startBot(number, bot.sessionPath);
     
     if (botProcess) {
-      res.json({
-        success: true,
-        message: `Bot ${number} démarré avec succès`,
-        pid: botProcess.pid,
-        timestamp: new Date().toISOString()
-      });
+      res.json({ success: true, message: "Bot démarré", pid: botProcess.pid });
     } else {
-      res.status(500).json({
-        success: false,
-        error: "Erreur démarrage bot",
-        message: `Impossible de démarrer le bot ${number}`,
-        timestamp: new Date().toISOString()
-      });
+      res.status(500).json({ success: false, error: "Erreur démarrage" });
     }
     
   } catch (error) {
-    console.error(`❌ Erreur démarrage bot:`, error);
-    
-    res.status(500).json({
-      success: false,
-      error: "Erreur serveur",
-      message: error.message,
-      timestamp: new Date().toISOString()
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// 🛑 ARRÊTER UN BOT
+// 🛑 Arrêter bot
 app.post("/stop-bot/:number", async (req, res) => {
   try {
     const { number } = req.params;
     
-    const stopped = await stopBot(number);
-    
-    if (stopped) {
-      res.json({
-        success: true,
-        message: `Bot ${number} arrêté`,
-        timestamp: new Date().toISOString()
-      });
+    if (botProcesses.has(number)) {
+      const process = botProcesses.get(number);
+      process.kill('SIGTERM');
+      botProcesses.delete(number);
+      res.json({ success: true, message: "Bot arrêté" });
     } else {
-      res.status(404).json({
-        success: false,
-        error: "Bot non trouvé",
-        message: `Aucun bot actif trouvé pour ${number}`,
-        timestamp: new Date().toISOString()
-      });
+      res.status(404).json({ success: false, error: "Bot non trouvé" });
     }
     
   } catch (error) {
-    console.error(`❌ Erreur arrêt bot:`, error);
-    
-    res.status(500).json({
-      success: false,
-      error: "Erreur serveur",
-      message: error.message,
-      timestamp: new Date().toISOString()
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// 📊 ACTIVE BOTS
+// 📊 Liste bots
 app.get("/active-bots", (req, res) => {
   try {
-    let sessionDirs = [];
-    try {
-      sessionDirs = fs.existsSync(SESSIONS_DIR) 
-        ? fs.readdirSync(SESSIONS_DIR) 
-        : [];
-    } catch (e) {
-      console.warn("⚠️ Erreur lecture sessions:", e.message);
-    }
-    
     const botsList = [];
     
-    // Ajouter les bots actifs
     activeBots.forEach((bot, number) => {
       botsList.push({
         number: number,
         connected: bot.connected,
-        botStarted: bot.botStarted || false,
-        botPid: bot.botPid || null,
-        hasSession: fs.existsSync(bot.sessionPath || ''),
+        botRunning: botProcesses.has(number),
+        botPid: bot.botPid,
         timestamp: bot.timestamp
       });
-    });
-    
-    // Ajouter les sessions existantes
-    sessionDirs.forEach(sessionDir => {
-      const sessionPath = path.join(SESSIONS_DIR, sessionDir);
-      try {
-        const number = sessionDir.replace(/_/g, '').replace(/[^+\d]/g, '');
-        if (number && !activeBots.has(number)) {
-          botsList.push({
-            number: number,
-            connected: false,
-            botStarted: false,
-            hasSession: true,
-            timestamp: fs.statSync(sessionPath).mtimeMs
-          });
-        }
-      } catch (e) {
-        // Ignorer
-      }
     });
     
     res.json({
       success: true,
       activeBots: botsList,
       count: botsList.length,
-      totalSessions: sessionDirs.length,
       botsRunning: botProcesses.size,
-      baileys_available: baileysAvailable,
-      timestamp: new Date().toISOString()
+      baileys_available: baileysAvailable
     });
     
   } catch (error) {
-    console.error("❌ Erreur active-bots:", error.message);
-    
-    res.json({
-      success: true,
-      activeBots: [],
-      count: 0,
-      totalSessions: 0,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
+    res.json({ success: true, activeBots: [], count: 0 });
   }
 });
 
-// 📈 STATISTIQUES
-app.get("/stats", (req, res) => {
-  const memory = process.memoryUsage();
-  let sessionDirs = [];
-  
-  try {
-    sessionDirs = fs.existsSync(SESSIONS_DIR) 
-      ? fs.readdirSync(SESSIONS_DIR) 
-      : [];
-  } catch (e) {
-    // Ignorer
-  }
-  
-  res.json({
-    success: true,
-    stats: {
-      server_status: "online",
-      baileys_status: baileysAvailable ? "loaded" : "not_loaded",
-      uptime: Math.floor(process.uptime()),
-      active_bots: activeBots.size,
-      bots_running: botProcesses.size,
-      total_sessions: sessionDirs.length,
-      memory_usage: Math.round(memory.heapUsed / 1024 / 1024) + "MB",
-      platform: process.platform,
-      node_version: process.version,
-      timestamp: new Date().toISOString()
-    }
-  });
-});
-
-// 📴 Déconnecter un bot
-app.delete("/disconnect/:number", async (req, res) => {
-  try {
-    const { number } = req.params;
-    
-    // Arrêter le bot si en cours d'exécution
-    await stopBot(number);
-    
-    if (activeBots.has(number)) {
-      const bot = activeBots.get(number);
-      try {
-        if (bot.sock && bot.sock.ws) {
-          bot.sock.ws.close();
-        }
-      } catch (e) {
-        // Ignorer
-      }
-      activeBots.delete(number);
-    }
-    
-    res.json({
-      success: true,
-      message: `Bot déconnecté pour ${number}`,
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// 🗑️ Supprimer une session
-app.delete("/delete-session/:number", async (req, res) => {
-  try {
-    const { number } = req.params;
-    const sessionId = number.replace(/[^a-zA-Z0-9]/g, '_');
-    const sessionPath = path.join(SESSIONS_DIR, sessionId);
-    
-    // Arrêter le bot si en cours d'exécution
-    await stopBot(number);
-    
-    let deleted = false;
-    if (fs.existsSync(sessionPath)) {
-      fs.rmSync(sessionPath, { recursive: true, force: true });
-      deleted = true;
-    }
-    
-    // Supprimer aussi des bots actifs
-    if (activeBots.has(number)) {
-      activeBots.delete(number);
-    }
-    
-    res.json({
-      success: true,
-      deleted: deleted,
-      message: deleted ? `Session supprimée pour ${number}` : "Session non trouvée",
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// 🚀 Démarrer le serveur
+// 🚀 Démarrer serveur
 async function startServer() {
-  // Charger Baileys au démarrage
   await loadBaileys();
   
   app.listen(PORT, () => {
     console.log(`
 ╔══════════════════════════════════════════════════════╗
-║           WHATSAPP BOT SERVER - COMPLET             ║
+║           WHATSAPP BOT SERVER - ULTIME              ║
 ╠══════════════════════════════════════════════════════╣
-║ 🚀 Serveur lancé sur le port ${PORT}                     ║
-║ 🌍 URL: http://localhost:${PORT}                       ║
-║ 🖥️ Panel: http://localhost:${PORT}/panel              ║
-║ 🤖 Dossier bot: ${BOT_DIR}                     ║
-║ 📱 WhatsApp: ${baileysAvailable ? '✅ ACTIF' : '❌ HORS LIGNE'}           ║
-║ 🔥 Génère codes + Démarre bots automatiquement      ║
-║ 📊 Stats: http://localhost:${PORT}/stats              ║
-║ 🛡️  Health: http://localhost:${PORT}/health           ║
+║ 🚀 Port: ${PORT}                                          ║
+║ 🌍 URL: http://localhost:${PORT}                          ║
+║ 🤖 Bot: ${fs.existsSync(BOT_INDEX_PATH) ? '✅ PRÊT' : '❌ ABSENT'}      ║
+║ 📱 WhatsApp: ${baileysAvailable ? '✅ ACTIF' : '❌ HORS LIGNE'}         ║
+║ 🔥 Auto-démarrage bot: OUI                          ║
+║ 🐛 logger.child FIXÉ: OUI                           ║
+║ 📊 Interface: http://localhost:${PORT}/panel           ║
 ╚══════════════════════════════════════════════════════╝
     `);
     
-    // Vérifier le dossier bot
-    if (!fs.existsSync(BOT_DIR)) {
-      console.warn(`⚠️ ATTENTION: Dossier bot non trouvé: ${BOT_DIR}`);
-      console.warn(`   Les bots ne pourront pas être démarrés`);
-    } else if (!fs.existsSync(path.join(BOT_DIR, "index.js"))) {
-      console.warn(`⚠️ ATTENTION: Fichier bot/index.js non trouvé`);
-      console.warn(`   Les bots ne pourront pas être démarrés`);
-    } else {
-      console.log(`✅ Bot prêt à être démarré: ${path.join(BOT_DIR, "index.js")}`);
-    }
-    
-    // Keep-alive pour Render
-    if (process.env.RENDER) {
-      console.log("🔄 Auto-ping activé pour Render.com");
-      setInterval(() => {
-        fetch(`http://localhost:${PORT}/health`).catch(() => {});
-      }, 600000);
+    if (!fs.existsSync(BOT_INDEX_PATH)) {
+      console.log(`\n⚠️  IMPORTANT: Créez le fichier bot/index.js`);
+      console.log(`   Structure requise:`);
+      console.log(`   📁 bot/`);
+      console.log(`   └── 📄 index.js    <-- VOTRE BOT ICI\n`);
     }
   });
 }
 
-// 🛑 Gestion des erreurs globales
-process.on('uncaughtException', (error) => {
-  console.error('💥 ERREUR NON CATCHÉE:', error.message);
-  console.error(error.stack);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('⚠️ PROMISE NON GÉRÉE:', reason);
-});
-
-// Nettoyer à l'arrêt
-process.on('SIGTERM', async () => {
-  console.log('🔴 Arrêt du serveur, nettoyage des bots...');
-  
-  // Arrêter tous les bots
-  for (const [number, process] of botProcesses) {
-    try {
-      process.kill('SIGTERM');
-    } catch (e) {
-      // Ignorer
-    }
-  }
-  
-  process.exit(0);
-});
-
-process.on('SIGINT', async () => {
-  console.log('🔴 Arrêt du serveur (Ctrl+C)...');
-  
-  // Arrêter tous les bots
-  for (const [number, process] of botProcesses) {
-    try {
-      process.kill('SIGTERM');
-    } catch (e) {
-      // Ignorer
-    }
-  }
-  
-  process.exit(0);
-});
-
-// 🏁 Point d'entrée
-try {
-  startServer().catch(error => {
-    console.error('💥 ERREUR DÉMARRAGE:', error.message);
-    console.error(error.stack);
-    process.exit(1);
-  });
-} catch (fatalError) {
-  console.error('💥 ERREUR FATALE:', fatalError.message);
-  process.exit(1);
-}
-
-// Export pour les tests
-export { app, baileysAvailable, startBot, stopBot };
+// 🏁 Démarrer
+startServer().catch(console.error);
