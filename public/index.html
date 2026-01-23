@@ -630,6 +630,25 @@
             gap: 8px;
         }
         
+        .server-url {
+            background: rgba(37, 211, 102, 0.1);
+            border: 1px solid rgba(37, 211, 102, 0.3);
+            color: #25D366;
+            font-family: monospace;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 13px;
+            margin-top: 10px;
+            word-break: break-all;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .server-url i {
+            color: #25D366;
+        }
+        
         footer {
             text-align: center;
             margin-top: 50px;
@@ -677,6 +696,24 @@
         .bot-item {
             animation: slideIn 0.3s ease;
         }
+        
+        .url-display {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            border-left: 4px solid #25D366;
+        }
+        
+        .url-display a {
+            color: #25D366;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        
+        .url-display a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -693,6 +730,12 @@
             </div>
             <div class="welcome-message">
                 Gère tous tes bots en un seul endroit. Surveille les performances, déploie de nouveaux bots et optimise ton automatisation.
+            </div>
+            
+            <!-- Affichage URL Render -->
+            <div class="url-display" id="server-url-display" style="display: none;">
+                <i class="fas fa-link"></i>
+                <span>Serveur: <a href="#" id="server-url-link" target="_blank"></a></span>
             </div>
         </header>
         
@@ -795,7 +838,7 @@
                 
                 <div class="server-status">
                     <span class="status-indicator-large" id="server-status-indicator"></span>
-                    <span id="server-status-text">Statut serveur: Vérification...</span>
+                    <span id="server-status-text">Connexion au serveur...</span>
                 </div>
                 
                 <div class="server-info">
@@ -810,6 +853,10 @@
                     <div class="info-item">
                         <i class="fas fa-plug"></i>
                         <span id="server-mode">WhatsApp: --</span>
+                    </div>
+                    <div class="info-item">
+                        <i class="fas fa-server"></i>
+                        <span id="server-url">URL: --</span>
                     </div>
                 </div>
                 
@@ -855,6 +902,7 @@
                             <li>Entrez votre numéro WhatsApp</li>
                             <li>Saisissez le code WhatsApp ci-dessus</li>
                             <li>Cliquez sur <strong>'Valider'</strong></li>
+                            <li>Le bot démarre automatiquement après connexion</li>
                         </ol>
                     </div>
                     
@@ -873,7 +921,7 @@
         </div>
         
         <footer>
-            <p>HexTech Bot Manager • Utilise l'API WhatsApp officielle • Max 20 sessions simultanées</p>
+            <p>HexTech Bot Manager • Serveur Render.com • WhatsApp API Officielle • Max 20 sessions</p>
             <p style="margin-top: 10px; font-size: 12px; color: #475569;">
                 © 2024 HexTech - Tous droits réservés
             </p>
@@ -881,9 +929,20 @@
     </div>
 
     <script>
-        // Configuration
-        const SERVER_URL = window.location.origin || 'http://localhost:3000';
-        const MAX_SESSIONS = 20; // Limite à 20 sessions
+        // Configuration - URL automatique pour Render
+        function getServerUrl() {
+            // En production (Render.com)
+            if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+                return window.location.origin;
+            }
+            // En développement local
+            return 'http://localhost:3000';
+        }
+        
+        const SERVER_URL = getServerUrl();
+        const MAX_SESSIONS = 20;
+        
+        console.log(`🌐 Connexion au serveur: ${SERVER_URL}`);
         
         // Éléments DOM
         const botListElement = document.getElementById('bot-list');
@@ -911,8 +970,11 @@
         const serverUptimeElement = document.getElementById('server-uptime');
         const serverMemoryElement = document.getElementById('server-memory');
         const serverModeElement = document.getElementById('server-mode');
+        const serverUrlElement = document.getElementById('server-url');
         const sessionsProgressElement = document.getElementById('sessions-progress');
         const activeProgressElement = document.getElementById('active-progress');
+        const serverUrlDisplay = document.getElementById('server-url-display');
+        const serverUrlLink = document.getElementById('server-url-link');
         
         // Variables d'état
         let isPairing = false;
@@ -921,11 +983,19 @@
         let activeBotsCount = 0;
         let totalSessions = 0;
         
+        // Afficher l'URL du serveur
+        function displayServerUrl() {
+            serverUrlDisplay.style.display = 'block';
+            serverUrlLink.textContent = SERVER_URL;
+            serverUrlLink.href = SERVER_URL;
+            serverUrlElement.textContent = `URL: ${SERVER_URL.replace('https://', '').replace('http://', '').split('/')[0]}`;
+        }
+        
         // Fonction pour valider le numéro
         function validatePhoneNumber(number) {
             if (!number) return { valid: false, error: "Veuillez entrer un numéro WhatsApp" };
             
-            const cleaned = number.replace(/\s/g, '');
+            const cleaned = number.replace(/\s/g, '').trim();
             
             const internationalRegex = /^\+[1-9]\d{9,14}$/;
             const localRegex = /^[1-9]\d{9,14}$/;
@@ -933,11 +1003,17 @@
             if (!internationalRegex.test(cleaned) && !localRegex.test(cleaned)) {
                 return { 
                     valid: false, 
-                    error: "Format invalide. Ex: +243810000000, 33123456789" 
+                    error: "Format invalide. Exemples: +243810000000, 33123456789, +14155552671" 
                 };
             }
             
-            return { valid: true, number: cleaned };
+            // Formatage final
+            let formatted = cleaned;
+            if (!formatted.startsWith('+') && formatted.length >= 10) {
+                formatted = '+' + formatted;
+            }
+            
+            return { valid: true, formatted: formatted };
         }
         
         // Fonction pour afficher une erreur
@@ -969,7 +1045,7 @@
                 if (response.ok) {
                     const data = await response.json();
                     
-                    whatsappAvailable = data.baileys === 'loaded';
+                    whatsappAvailable = data.baileys === true || data.baileys === 'loaded';
                     
                     if (whatsappAvailable) {
                         serverStatusIndicator.className = 'status-indicator-large connected-large';
@@ -995,7 +1071,7 @@
                     return whatsappAvailable;
                 }
             } catch (error) {
-                console.error('Erreur health check:', error);
+                console.error('Erreur connexion serveur:', error);
             }
             
             // Échec
@@ -1017,6 +1093,10 @@
                 const hours = Math.floor(data.uptime / 3600);
                 const minutes = Math.floor((data.uptime % 3600) / 60);
                 serverUptimeElement.textContent = `Uptime: ${hours}h ${minutes}m`;
+            }
+            
+            if (data.stats && data.stats.memory_usage) {
+                serverMemoryElement.textContent = `Mémoire: ${data.stats.memory_usage}`;
             }
         }
         
@@ -1058,20 +1138,10 @@
                     renderBots(data.activeBots);
                 }
                 
-                // Mettre à jour les stats serveur
-                updateServerStats(data);
-                
             } catch (error) {
                 console.error('Erreur chargement bots:', error);
                 loadingBotsElement.classList.remove('show');
                 showError("Impossible de charger la liste des bots");
-            }
-        }
-        
-        // Mettre à jour les stats serveur
-        function updateServerStats(data) {
-            if (data.stats) {
-                serverMemoryElement.textContent = `Mémoire: ${data.stats.memory_usage || '--'}`;
             }
         }
         
@@ -1104,30 +1174,31 @@
                 }
                 
                 const isConnected = bot.connected !== false;
-                const isBotStarted = bot.botStarted === true;
+                const isBotRunning = bot.botRunning === true;
                 
                 botElement.innerHTML = `
                     <div class="bot-avatar">
                         ${emoji}
                     </div>
                     <div class="bot-info">
-                        <div class="bot-name">${countryName}${isBotStarted ? ' 🤖' : ''}</div>
+                        <div class="bot-name">${countryName}${isBotRunning ? ' 🤖' : ''}</div>
                         <div class="bot-number">${bot.number}</div>
                         <div class="bot-status">
                             <span class="status-indicator ${isConnected ? 'connected' : 'disconnected'}"></span>
                             <span class="${isConnected ? 'status-connected' : 'status-disconnected'}">
                                 ${isConnected ? 'Connecté' : 'Déconnecté'}
                             </span>
+                            ${isBotRunning ? '<span style="color: #25D366; margin-left: 10px;">🤖 Actif</span>' : ''}
                         </div>
                     </div>
                     <div class="bot-actions">
-                        ${!isBotStarted && isConnected ? `
+                        ${!isBotRunning && isConnected ? `
                         <button class="btn-action" onclick="startBot('${bot.number}')" title="Démarrer le bot">
                             <i class="fas fa-play"></i>
                             Démarrer
                         </button>
                         ` : ''}
-                        ${isBotStarted ? `
+                        ${isBotRunning ? `
                         <button class="btn-action delete" onclick="stopBot('${bot.number}')" title="Arrêter le bot">
                             <i class="fas fa-stop"></i>
                             Arrêter
@@ -1182,7 +1253,7 @@
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ number: validation.number })
+                    body: JSON.stringify({ number: validation.formatted })
                 });
                 
                 const data = await response.json();
@@ -1194,14 +1265,27 @@
                 // Afficher le résultat
                 currentPairingCode = data.pairingCode;
                 pairingCodeElement.textContent = currentPairingCode;
-                resultNumberElement.textContent = data.number || validation.number;
+                resultNumberElement.textContent = data.number || validation.formatted;
+                
+                // Mettre à jour les instructions si disponibles
+                if (data.instructions && Array.isArray(data.instructions)) {
+                    const instructionsList = document.getElementById('instructions-list');
+                    instructionsList.innerHTML = '';
+                    data.instructions.forEach(instruction => {
+                        const li = document.createElement('li');
+                        li.textContent = instruction;
+                        instructionsList.appendChild(li);
+                    });
+                }
                 
                 // Afficher le résultat
                 pairingResultElement.classList.add('show');
                 showSuccess("Code WhatsApp généré avec succès !");
                 
                 // Recharger la liste des bots
-                loadBots();
+                setTimeout(() => {
+                    loadBots();
+                }, 1000);
                 
                 // Focaliser sur le bouton copier
                 setTimeout(() => {
@@ -1340,6 +1424,9 @@
         
         // Initialisation
         async function init() {
+            // Afficher l'URL du serveur
+            displayServerUrl();
+            
             // Mettre à jour la limite de sessions
             maxSessionsElement.textContent = MAX_SESSIONS;
             
@@ -1375,6 +1462,11 @@
             setTimeout(() => {
                 showSuccess("Bienvenue sur HexTech Bot Manager !");
             }, 1000);
+            
+            // Afficher la console
+            console.log(`🚀 Interface HexTech initialisée`);
+            console.log(`🌐 Serveur: ${SERVER_URL}`);
+            console.log(`📱 WhatsApp: ${whatsappAvailable ? '✅ Disponible' : '❌ Indisponible'}`);
         }
         
         // Démarrer l'application
