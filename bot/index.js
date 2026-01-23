@@ -226,12 +226,7 @@ function isFixedOwner(sender) {
            sender.endsWith("243816107573@s.whatsapp.net");
 }
 
-// Fonction principale isOwner qui utilise la config dynamique
-function isOwner(senderJid) {
-  const normalizedJid = senderJid.split(":")[0];
-  const ownerJid = OWNER_NUMBER.split(":")[0];
-  return normalizedJid === ownerJid || isFixedOwner(senderJid);
-}
+// Fonctio
 // ==================== CONFIGURATION OWNER DYNAMIQUE ====================
 
 // ⚡ VARIABLES POUR L'API (Nouveau)
