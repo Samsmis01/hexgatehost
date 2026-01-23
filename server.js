@@ -1,4 +1,4 @@
-// server.js - VERSION FINALE CORRIGÉE POUR RENDER
+// server.js - VERSION AVEC VRAI BAILEYS FORCÉ
 import express from "express";
 import cors from "cors";
 import bodyParser from "body-parser";
@@ -17,116 +17,107 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// 📁 Dossier des sessions
+// 📁 Sessions
 const SESSIONS_DIR = path.join(__dirname, "sessions");
 if (!fs.existsSync(SESSIONS_DIR)) {
   fs.mkdirSync(SESSIONS_DIR, { recursive: true });
-  console.log("📁 Dossier sessions cree");
 }
 
-// 🎯 Variables Baileys - IMPORTANT: Toujours initialisées
-let baileysAvailable = false;
+// 🎯 CHARGER BAILEYS MANUELLEMENT
 let Baileys = null;
+let baileysAvailable = false;
 
-// 🔧 Fonction pour charger Baileys
-async function loadBaileys() {
-  if (Baileys) return true; // Déjà chargé
+async function forceLoadBaileys() {
+  console.log("🔄 Loading Baileys (forced)...");
   
-  try {
-    console.log("🔄 Chargement de Baileys...");
-    
-    // Tentative 1: Import ES module
-    try {
+  // Essayer plusieurs méthodes
+  const loadMethods = [
+    // Méthode 1: ES Module normal
+    async () => {
       const module = await import("@whiskeysockets/baileys");
-      Baileys = module;
-      baileysAvailable = true;
-      console.log("✅ Baileys charge (ES Module)");
-      return true;
-    } catch (e) {
-      console.warn("⚠️ ES Module failed:", e.message);
-    }
+      return module;
+    },
     
-    // Tentative 2: Require CommonJS
-    try {
+    // Méthode 2: Chemin absolu
+    async () => {
+      const baileysPath = path.join(__dirname, "node_modules", "@whiskeysockets", "baileys", "lib", "index.js");
+      if (fs.existsSync(baileysPath)) {
+        const module = await import(`file://${baileysPath}`);
+        return module;
+      }
+      throw new Error("Baileys path not found");
+    },
+    
+    // Méthode 3: Dynamic import avec URL
+    async () => {
+      const module = await import("@whiskeysockets/baileys/lib/index.js");
+      return module;
+    },
+    
+    // Méthode 4: CommonJS
+    async () => {
       const { createRequire } = await import("module");
       const require = createRequire(import.meta.url);
-      Baileys = require("@whiskeysockets/baileys");
-      baileysAvailable = true;
-      console.log("✅ Baileys charge (CommonJS)");
-      return true;
-    } catch (e) {
-      console.warn("⚠️ CommonJS failed:", e.message);
+      return require("@whiskeysockets/baileys");
     }
-    
-    console.warn("❌ Baileys non disponible - Mode demo");
-    baileysAvailable = false;
-    return false;
-    
-  } catch (error) {
-    console.error("💥 Erreur chargement Baileys:", error.message);
-    baileysAvailable = false;
-    return false;
+  ];
+  
+  for (let i = 0; i < loadMethods.length; i++) {
+    try {
+      console.log(`Trying method ${i + 1}...`);
+      Baileys = await loadMethods[i]();
+      baileysAvailable = true;
+      console.log(`✅ Baileys loaded with method ${i + 1}`);
+      
+      // Vérifier que makeWASocket est disponible
+      if (Baileys.makeWASocket || Baileys.default) {
+        return true;
+      }
+    } catch (error) {
+      console.warn(`Method ${i + 1} failed: ${error.message}`);
+    }
   }
+  
+  console.error("❌ All Baileys loading methods failed");
+  baileysAvailable = false;
+  return false;
 }
 
-// 📞 ROUTES (disponibles même sans Baileys)
-
-// 🌐 ROUTE PRINCIPALE
+// 🌐 ROUTES DE BASE
 app.get("/", (req, res) => {
   res.json({
     success: true,
-    message: "🚀 HEXGATE Pairing Server - V1",
-    version: "1.0.0",
-    status: baileysAvailable ? "full" : "demo",
-    endpoints: {
-      pairing: "POST /pair",
-      activeBots: "GET /active-bots",
-      health: "GET /health",
-      panel: "GET /panel",
-      stats: "GET /stats"
-    },
+    message: "✅ HEXGATE Pairing Server - V1",
+    status: "online",
+    baileys: baileysAvailable ? "loaded" : "missing",
     timestamp: new Date().toISOString()
   });
 });
 
-// 🩺 HEALTH CHECK (obligatoire pour Render)
 app.get("/health", (req, res) => {
   res.json({
     success: true,
     status: "healthy",
-    baileys: baileysAvailable ? "loaded" : "demo",
-    uptime: process.uptime(),
-    memory: Math.round(process.memoryUsage().rss / 1024 / 1024) + "MB",
-    timestamp: new Date().toISOString()
+    baileys: baileysAvailable,
+    uptime: process.uptime()
   });
 });
 
-// 🖥️ INTERFACE WEB
 app.get("/panel", (req, res) => {
-  const htmlPath = path.join(__dirname, "public", "index.html");
-  if (fs.existsSync(htmlPath)) {
-    res.sendFile(htmlPath);
-  } else {
-    res.json({
-      success: false,
-      error: "HTML interface not found",
-      tip: "Create public/index.html"
-    });
-  }
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// 📱 ROUTE PAIRING PRINCIPALE (CORRIGÉE)
+// 📱 ROUTE PAIRING AVEC VRAI WHATSAPP
 app.post("/pair", async (req, res) => {
-  const startTime = Date.now();
+  console.log("📞 Pairing request received");
   
   try {
     let { number } = req.body;
     
-    // Validation
-    if (!number || typeof number !== "string") {
+    if (!number) {
       return res.status(400).json({
         success: false,
-        error: "WhatsApp number required (format: 243810000000)"
+        error: "Phone number required"
       });
     }
     
@@ -135,7 +126,7 @@ app.post("/pair", async (req, res) => {
     if (number.length < 9) {
       return res.status(400).json({
         success: false,
-        error: "Invalid number (min 9 digits)"
+        error: "Invalid number"
       });
     }
     
@@ -144,288 +135,167 @@ app.post("/pair", async (req, res) => {
     }
     number = number.substring(0, 12);
     
-    console.log(`📱 Pairing request for: ${number}`);
+    console.log(`Processing: ${number}`);
     
-    // 🔧 FORCER le chargement de Baileys si pas déjà fait
+    // 🔥 FORCER le chargement de Baileys
     if (!Baileys) {
-      await loadBaileys();
+      await forceLoadBaileys();
     }
     
-    // 🎭 MODE DÉMO si Baileys non disponible
+    // ❌ Si Baileys n'est PAS disponible
     if (!baileysAvailable || !Baileys) {
-      const pairingCode = generatePairingCode();
-      const responseTime = Date.now() - startTime;
-      
-      console.log(`🎭 Demo code generated: ${pairingCode}`);
+      console.log("❌ Baileys not available - CANNOT generate real code");
       
       return res.json({
-        success: true,
-        pairingCode: pairingCode,
-        number: number,
-        message: "Code generated (demo mode)",
-        demo_mode: true,
-        instructions: [
-          "1. Go to https://web.whatsapp.com",
-          "2. Click 'Connect with phone number'",
-          "3. Enter your number",
-          "4. Enter the pairing code above",
-          "5. Click 'Validate'"
-        ],
-        expiresIn: "5 minutes",
-        responseTime: responseTime + "ms",
+        success: false,
+        error: "Baileys not installed on server",
+        solution: "Server needs Baileys installed to generate real WhatsApp codes",
+        temporary_code: generateDemoCode(),
+        message: "This is a DEMO code (not real WhatsApp)",
         timestamp: new Date().toISOString()
       });
     }
     
-    // 🔥 MODE RÉEL avec Baileys
-    console.log(`🔥 Real mode for: ${number}`);
+    // ✅ Baileys EST disponible - Générer VRAI code WhatsApp
+    console.log("🔥 Generating REAL WhatsApp code...");
     
-    // EXTRAIRE les fonctions CORRECTEMENT
-    const {
-      makeWASocket,
-      useMultiFileAuthState,
-      DisconnectReason,
-      fetchLatestBaileysVersion,
-      Browsers
-    } = Baileys;
+    // Extraire les fonctions de Baileys
+    const makeWASocket = Baileys.makeWASocket || Baileys.default;
+    const useMultiFileAuthState = Baileys.useMultiFileAuthState;
+    const fetchLatestBaileysVersion = Baileys.fetchLatestBaileysVersion;
+    const Browsers = Baileys.Browsers;
     
-    // VÉRIFICATION CRITIQUE
-    if (typeof makeWASocket !== "function") {
-      throw new Error("makeWASocket is not a function - Check Baileys import");
+    if (!makeWASocket || typeof makeWASocket !== "function") {
+      throw new Error("makeWASocket not found in Baileys");
     }
     
+    // Créer session
     const sessionPath = path.join(SESSIONS_DIR, number);
     if (!fs.existsSync(sessionPath)) {
       fs.mkdirSync(sessionPath, { recursive: true });
     }
     
-    let sock = null;
-    let pairingCode = null;
-    
+    // 🔑 GÉNÉRER VRAI CODE WHATSAPP
     try {
-      // 🔑 CHARGER LA SESSION
       const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
-      
-      // 📦 VERSION BAILEYS
       const { version } = await fetchLatestBaileysVersion();
       
-      // 🔌 CRÉER LA SOCKET WHATSAPP
-      sock = makeWASocket({
+      const sock = makeWASocket({
         version,
         logger: { level: "silent" },
         printQRInTerminal: false,
         auth: state,
         browser: Browsers.ubuntu("Chrome"),
-        markOnlineOnConnect: true,
-        syncFullHistory: false,
         connectTimeoutMs: 30000,
       });
       
       sock.ev.on("creds.update", saveCreds);
       
-      // 📞 GÉNÉRER LE CODE DE PAIRING
-      pairingCode = await sock.requestPairingCode(number);
-      console.log(`✅ Pair code generated: ${pairingCode}`);
+      // ⚠️ ATTENTION : Cette ligne contacte VRAIMENT les serveurs WhatsApp
+      const pairingCode = await sock.requestPairingCode(number);
       
-      // FERMER PROPREMENT
+      console.log(`✅ REAL WhatsApp code generated: ${pairingCode}`);
+      
+      // Fermer la connexion
       setTimeout(() => {
         try {
-          if (sock && sock.ws) {
-            sock.ws.close();
-          }
+          sock.ws?.close();
         } catch (e) {
           // Ignorer
         }
-      }, 2000);
+      }, 1000);
       
-    } catch (pairError) {
-      console.error(`❌ Pairing error: ${pairError.message}`);
-      
-      // Fallback au mode démo
-      const demoCode = generatePairingCode();
-      const responseTime = Date.now() - startTime;
-      
+      // ✅ RETOURNER LE VRAI CODE
       return res.json({
         success: true,
-        pairingCode: demoCode,
+        pairingCode: pairingCode,
         number: number,
-        message: "Code generated (demo fallback)",
-        demo_mode: true,
-        error: pairError.message,
+        message: "✅ REAL WhatsApp pairing code generated",
+        real_whatsapp: true,
         instructions: [
           "1. Go to https://web.whatsapp.com",
           "2. Click 'Connect with phone number'",
-          "3. Enter your number",
-          "4. Enter the pairing code above"
+          "3. Enter: " + number,
+          "4. Enter code: " + pairingCode,
+          "5. Click 'Validate'"
         ],
         expiresIn: "5 minutes",
-        responseTime: responseTime + "ms",
+        timestamp: new Date().toISOString()
+      });
+      
+    } catch (whatsappError) {
+      console.error("WhatsApp API error:", whatsappError.message);
+      
+      return res.json({
+        success: false,
+        error: "WhatsApp connection failed",
+        details: whatsappError.message,
+        temporary_code: generateDemoCode(),
+        message: "Could not connect to WhatsApp servers",
         timestamp: new Date().toISOString()
       });
     }
     
-    const responseTime = Date.now() - startTime;
-    
-    // ✅ RÉPONSE FINALE (VRAI CODE)
-    res.json({
-      success: true,
-      pairingCode: pairingCode,
-      number: number,
-      message: "WhatsApp pairing code generated",
-      demo_mode: false,
-      instructions: [
-        "1. Go to https://web.whatsapp.com",
-        "2. Click 'Connect with phone number'",
-        "3. Enter your number: " + number,
-        "4. Enter the code: " + pairingCode,
-        "5. Click 'Validate' to connect"
-      ],
-      expiresIn: "5 minutes",
-      responseTime: responseTime + "ms",
-      timestamp: new Date().toISOString()
-    });
-    
   } catch (error) {
-    console.error(`💥 Fatal error in /pair: ${error.message}`);
-    
-    const demoCode = generatePairingCode();
-    const responseTime = Date.now() - startTime;
+    console.error("Server error:", error);
     
     res.json({
-      success: true,
-      pairingCode: demoCode,
-      number: req.body?.number || "243000000000",
-      message: "Code generated (emergency demo)",
-      demo_mode: true,
-      emergency: true,
-      instructions: [
-        "1. Go to https://web.whatsapp.com",
-        "2. Click 'Connect with phone number'",
-        "3. Enter your number",
-        "4. Enter the pairing code above"
-      ],
-      expiresIn: "5 minutes",
-      responseTime: responseTime + "ms",
+      success: false,
+      error: "Server error",
+      details: error.message,
+      temporary_code: generateDemoCode(),
       timestamp: new Date().toISOString()
     });
   }
 });
 
-// 📊 ACTIVE BOTS (compatible HTML)
+// 📊 Active bots (pour votre HTML)
 app.get("/active-bots", (req, res) => {
-  try {
-    let sessionDirs = [];
-    try {
-      sessionDirs = fs.readdirSync(SESSIONS_DIR);
-    } catch (e) {
-      // Ignorer
-    }
-    
-    // Données compatibles avec votre HTML
-    const demoBots = baileysAvailable ? [] : [
-      {
-        number: "243810000000",
-        connected: true,
-        demo: true
-      },
-      {
-        number: "243900000000", 
-        connected: false,
-        demo: true
-      }
-    ];
-    
-    res.json({
-      success: true,
-      activeBots: demoBots,
-      count: demoBots.length,
-      totalSessions: sessionDirs.length,
-      mode: baileysAvailable ? "real" : "demo"
-    });
-    
-  } catch (error) {
-    res.json({
-      success: true,
-      activeBots: [],
-      count: 0,
-      mode: "error"
-    });
-  }
-});
-
-// 📈 STATISTICS
-app.get("/stats", (req, res) => {
   res.json({
     success: true,
-    stats: {
-      mode: baileysAvailable ? "real" : "demo",
-      baileys: baileysAvailable ? "loaded" : "demo",
-      uptime: process.uptime(),
-      platform: process.platform,
-      node: process.version
-    }
+    activeBots: [],
+    count: 0,
+    totalSessions: 0
   });
 });
 
-// 🛠️ FONCTION GÉNÉRER CODE
-function generatePairingCode() {
+// 🛠️ Générer code démo
+function generateDemoCode() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";
-  
-  for (let i = 0; i < 4; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
+  for (let i = 0; i < 4; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
   code += "-";
-  for (let i = 0; i < 4; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  
+  for (let i = 0; i < 4; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
   return code;
 }
 
-// 🚀 DÉMARRER SERVEUR
+// 🚀 Démarrer
 async function startServer() {
   // Charger Baileys au démarrage
-  await loadBaileys();
+  await forceLoadBaileys();
   
   app.listen(PORT, () => {
     console.log(`
-╔══════════════════════════════════════════════════════╗
-║               HEXGATE PAIRING SERVER                ║
-╠══════════════════════════════════════════════════════╣
-║ 🚀 Server running on port ${PORT}                     ║
-║ 🌍 URL: http://localhost:${PORT}                       ║
-║ 🖥️ Panel: http://localhost:${PORT}/panel              ║
-║ 📱 Mode: ${baileysAvailable ? "REAL (Baileys)" : "DEMO"}        ║
-║ 📁 Sessions: ${SESSIONS_DIR}                          ║
-║ 🛡️  Health: http://localhost:${PORT}/health            ║
-╚══════════════════════════════════════════════════════╝
+╔════════════════════════════════════════╗
+║   HEXGATE WHATSAPP SERVER             ║
+╠════════════════════════════════════════╣
+║ 🚀 Port: ${PORT}                          ║
+║ 🌍 URL: http://localhost:${PORT}           ║
+║ 📱 Baileys: ${baileysAvailable ? '✅ LOADED' : '❌ MISSING'}     ║
+║ 🔗 Panel: http://localhost:${PORT}/panel   ║
+╚════════════════════════════════════════╝
     `);
     
-    // Keep-alive pour Render
-    if (process.env.RENDER) {
-      console.log("🔄 Auto-ping enabled for Render.com");
-      setInterval(() => {
-        fetch(`http://localhost:${PORT}/health`).catch(() => {});
-      }, 600000); // 10 minutes
+    if (!baileysAvailable) {
+      console.log("⚠️  WARNING: Baileys not installed!");
+      console.log("⚠️  Only DEMO codes will work");
+      console.log("⚠️  Fix: Install Baileys manually on Render");
     }
   });
 }
 
-// 🛑 GESTION ERREURS
-process.on("uncaughtException", (error) => {
-  console.error("Uncaught Exception:", error.message);
-});
-
-process.on("unhandledRejection", (reason) => {
-  console.error("Unhandled Rejection:", reason);
-});
-
-// 🏁 POINT D'ENTRÉE
+// 🏁 Démarrer le serveur
 startServer().catch(error => {
-  console.error("Failed to start server:", error);
+  console.error("Failed to start:", error);
   process.exit(1);
 });
-
-// Export pour tests
-export { app, baileysAvailable };
