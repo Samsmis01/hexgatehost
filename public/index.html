@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HexTech - Gestionnaire de Bots WhatsApp</title>
+    <title>HexTech - Gestionnaire WhatsApp</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * {
@@ -38,12 +38,12 @@
         }
         
         .logo-icon {
-            color: #3b82f6;
+            color: #10b981;
             font-size: 28px;
         }
         
         .logo h1 {
-            color: #3b82f6;
+            color: #10b981;
             font-size: 28px;
             font-weight: 700;
             letter-spacing: -0.5px;
@@ -90,7 +90,7 @@
         .card-value {
             font-size: 48px;
             font-weight: 700;
-            color: #3b82f6;
+            color: #10b981;
             margin-bottom: 10px;
         }
         
@@ -117,7 +117,7 @@
         }
         
         .bot-count {
-            background-color: #3b82f6;
+            background-color: #10b981;
             color: white;
             padding: 5px 15px;
             border-radius: 20px;
@@ -139,7 +139,7 @@
             align-items: center;
             gap: 15px;
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-            border-left: 4px solid #3b82f6;
+            border-left: 4px solid #10b981;
         }
         
         .bot-avatar {
@@ -218,8 +218,8 @@
         }
         
         .btn-action:hover {
-            border-color: #3b82f6;
-            color: #3b82f6;
+            border-color: #10b981;
+            color: #10b981;
         }
         
         .btn-action.delete:hover {
@@ -253,7 +253,7 @@
         
         input[type="text"]:focus {
             outline: none;
-            border-color: #3b82f6;
+            border-color: #10b981;
         }
         
         input[type="text"]::placeholder {
@@ -262,7 +262,7 @@
         
         .btn {
             padding: 15px 30px;
-            background-color: #3b82f6;
+            background-color: #10b981;
             color: white;
             border: none;
             border-radius: 8px;
@@ -276,7 +276,7 @@
         }
         
         .btn:hover {
-            background-color: #2563eb;
+            background-color: #059669;
         }
         
         .btn:disabled {
@@ -319,34 +319,26 @@
             font-size: 18px;
         }
         
-        .badge {
+        .badge-real {
+            background-color: #10b981;
+            color: white;
             padding: 5px 10px;
             border-radius: 6px;
             font-size: 12px;
             font-weight: 600;
         }
         
-        .badge-real {
-            background-color: #10b981;
-            color: white;
-        }
-        
-        .badge-demo {
-            background-color: #f59e0b;
-            color: white;
-        }
-        
         .pairing-code {
             font-size: 36px;
             font-weight: 700;
             text-align: center;
-            color: #3b82f6;
+            color: #10b981;
             letter-spacing: 2px;
             margin: 20px 0;
             padding: 15px;
-            background-color: rgba(59, 130, 246, 0.1);
+            background-color: rgba(16, 185, 129, 0.1);
             border-radius: 8px;
-            border: 1px dashed #3b82f6;
+            border: 1px dashed #10b981;
         }
         
         .instructions {
@@ -415,7 +407,7 @@
         
         .spinner {
             border: 3px solid #334155;
-            border-top: 3px solid #3b82f6;
+            border-top: 3px solid #10b981;
             border-radius: 50%;
             width: 30px;
             height: 30px;
@@ -454,6 +446,15 @@
             color: #475569;
         }
         
+        .server-alert {
+            background-color: rgba(245, 158, 11, 0.1);
+            color: #fde68a;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            border-left: 4px solid #f59e0b;
+        }
+        
         @media (max-width: 768px) {
             .main-content {
                 grid-template-columns: 1fr;
@@ -478,12 +479,12 @@
     <div class="container">
         <header>
             <div class="logo">
-                <div class="logo-icon"><i class="fas fa-robot"></i></div>
-                <h1>HexTech WhatsApp Manager</h1>
+                <div class="logo-icon"><i class="fab fa-whatsapp"></i></div>
+                <h1>HexTech WhatsApp</h1>
             </div>
-            <div class="logo-tagline">Interface de gestion des bots WhatsApp</div>
+            <div class="logo-tagline">Générateur de codes WhatsApp réels</div>
             <p style="color: #94a3b8; margin-top: 10px; font-size: 15px;">
-                Générez des codes d'appairage WhatsApp réels et gérez vos sessions.
+                Générez des codes d'appairage WhatsApp officiels - Pas de simulation, pas de démo
             </p>
         </header>
         
@@ -492,34 +493,33 @@
                 <div class="card-header">
                     <div class="card-title">Statut WhatsApp</div>
                 </div>
-                <div class="card-value" id="baileys-status">Chargement...</div>
-                <div class="card-description" id="baileys-description">API WhatsApp</div>
+                <div class="card-value" id="baileys-status">...</div>
+                <div class="card-description" id="baileys-description">Connexion WhatsApp</div>
             </div>
             
             <div class="card">
                 <div class="card-header">
-                    <div class="card-title">Bots Actifs</div>
+                    <div class="card-title">Sessions Actives</div>
                 </div>
                 <div class="card-value" id="active-bots-count">0</div>
-                <div class="card-description">Sessions actuellement connectées</div>
+                <div class="card-description">Sessions WhatsApp connectées</div>
             </div>
             
             <div class="bot-list-container card">
                 <div class="bot-list-header">
-                    <div class="bot-list-title">Mes Bots WhatsApp</div>
-                    <div class="bot-count" id="total-bots">0 bots</div>
+                    <div class="bot-list-title">Sessions WhatsApp</div>
+                    <div class="bot-count" id="total-bots">0 sessions</div>
                 </div>
                 <div class="bot-list" id="bot-list">
-                    <!-- Les bots seront ajoutés ici dynamiquement -->
                     <div class="loading" id="loading-bots">
                         <div class="spinner"></div>
-                        <div>Chargement des bots...</div>
+                        <div>Chargement des sessions...</div>
                     </div>
                 </div>
                 <div class="no-bots" id="no-bots" style="display: none;">
-                    <i class="fas fa-robot"></i>
-                    <h3>Aucun bot WhatsApp actif</h3>
-                    <p>Générez votre premier code d'appairage ci-dessous</p>
+                    <i class="fab fa-whatsapp"></i>
+                    <h3>Aucune session WhatsApp active</h3>
+                    <p>Générez votre premier code WhatsApp ci-dessous</p>
                 </div>
             </div>
             
@@ -528,6 +528,11 @@
                 <p style="color: #94a3b8; margin-bottom: 15px; font-size: 14px;">
                     Entrez un numéro WhatsApp international pour générer un code d'appairage réel
                 </p>
+                
+                <div id="server-alert" class="server-alert" style="display: none;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span id="alert-text">WhatsApp n'est pas disponible actuellement</span>
+                </div>
                 
                 <div class="pairing-form">
                     <div class="input-group">
@@ -546,7 +551,6 @@
                 <div class="server-info">
                     <div class="info-item" id="server-uptime">Uptime: --</div>
                     <div class="info-item" id="server-memory">Mémoire: --</div>
-                    <div class="info-item" id="server-mode">Mode: --</div>
                 </div>
                 
                 <div class="error-message" id="error-message">
@@ -561,7 +565,7 @@
                 <div class="pairing-result" id="pairing-result">
                     <div class="result-header">
                         <div class="result-title">Code WhatsApp généré</div>
-                        <div class="badge badge-real" id="result-badge">VRAI CODE WHATSAPP</div>
+                        <div class="badge-real">VRAI CODE WHATSAPP</div>
                     </div>
                     
                     <p style="color: #94a3b8; margin-bottom: 15px;">
@@ -594,7 +598,7 @@
         </div>
         
         <footer style="text-align: center; margin-top: 40px; color: #64748b; font-size: 14px; padding-top: 20px; border-top: 1px solid #1e293b;">
-            <p>HexTech WhatsApp Manager • API WhatsApp officielle • Tous formats internationaux supportés</p>
+            <p>HexTech WhatsApp • Vrais codes WhatsApp seulement • API WhatsApp officielle</p>
         </footer>
     </div>
 
@@ -611,8 +615,6 @@
         const pairingResultElement = document.getElementById('pairing-result');
         const pairingCodeElement = document.getElementById('pairing-code');
         const resultNumberElement = document.getElementById('result-number');
-        const instructionsListElement = document.getElementById('instructions-list');
-        const resultBadgeElement = document.getElementById('result-badge');
         const loadingPairElement = document.getElementById('loading-pair');
         const loadingBotsElement = document.getElementById('loading-bots');
         const errorMessageElement = document.getElementById('error-message');
@@ -626,27 +628,27 @@
         const baileysDescriptionElement = document.getElementById('baileys-description');
         const serverUptimeElement = document.getElementById('server-uptime');
         const serverMemoryElement = document.getElementById('server-memory');
-        const serverModeElement = document.getElementById('server-mode');
+        const serverAlertElement = document.getElementById('server-alert');
+        const alertTextElement = document.getElementById('alert-text');
         
         // Variables d'état
         let isPairing = false;
         let currentPairingCode = '';
+        let whatsappAvailable = false;
         
         // Fonction pour valider le numéro de téléphone
         function validatePhoneNumber(number) {
             if (!number) return { valid: false, error: "Veuillez entrer un numéro WhatsApp" };
             
-            // Nettoyer le numéro
             const cleaned = number.replace(/\s/g, '');
             
-            // Vérifier le format international
             const internationalRegex = /^\+[1-9]\d{9,14}$/;
             const localRegex = /^[1-9]\d{9,14}$/;
             
             if (!internationalRegex.test(cleaned) && !localRegex.test(cleaned)) {
                 return { 
                     valid: false, 
-                    error: "Format invalide. Exemples: +243810000000, 33123456789, +14155552671" 
+                    error: "Format invalide. Exemples: +243810000000" 
                 };
             }
             
@@ -657,6 +659,10 @@
         function showError(message) {
             errorTextElement.textContent = message;
             errorMessageElement.classList.add('show');
+            
+            setTimeout(() => {
+                errorMessageElement.classList.remove('show');
+            }, 5000);
         }
         
         // Fonction pour masquer l'erreur
@@ -670,61 +676,61 @@
                 const response = await fetch(`${SERVER_URL}/health`);
                 if (response.ok) {
                     const data = await response.json();
-                    serverStatusIndicator.className = 'status-indicator connected';
-                    serverStatusText.textContent = 'Serveur: En ligne';
-                    serverStatusText.className = 'status-online';
                     
-                    // Mettre à jour les infos serveur
+                    whatsappAvailable = data.baileys === 'loaded';
+                    
+                    if (whatsappAvailable) {
+                        serverStatusIndicator.className = 'status-indicator connected';
+                        serverStatusText.textContent = 'WhatsApp: En ligne';
+                        serverStatusText.className = 'status-online';
+                        baileysStatusElement.textContent = '✅ ACTIF';
+                        baileysDescriptionElement.textContent = 'API WhatsApp disponible';
+                        baileysStatusElement.style.color = '#10b981';
+                        serverAlertElement.style.display = 'none';
+                        pairButton.disabled = false;
+                    } else {
+                        serverStatusIndicator.className = 'status-indicator disconnected';
+                        serverStatusText.textContent = 'WhatsApp: Hors ligne';
+                        serverStatusText.className = 'status-offline';
+                        baileysStatusElement.textContent = '❌ HORS LIGNE';
+                        baileysDescriptionElement.textContent = 'API WhatsApp indisponible';
+                        baileysStatusElement.style.color = '#ef4444';
+                        alertTextElement.textContent = 'WhatsApp n\'est pas disponible actuellement. Veuillez réessayer plus tard.';
+                        serverAlertElement.style.display = 'block';
+                        pairButton.disabled = true;
+                    }
+                    
                     updateServerInfo(data);
-                    return true;
+                    return whatsappAvailable;
                 }
             } catch (error) {
                 console.error('Erreur health check:', error);
-            }
-            
-            // Essayer la route principale
-            try {
-                const response = await fetch(SERVER_URL);
-                if (response.ok) {
-                    const data = await response.json();
-                    serverStatusIndicator.className = 'status-indicator connected';
-                    serverStatusText.textContent = 'Serveur: En ligne';
-                    serverStatusText.className = 'status-online';
-                    
-                    updateServerInfo(data);
-                    return true;
-                }
-            } catch (e) {
-                console.error('Erreur route principale:', e);
             }
             
             // Échec
             serverStatusIndicator.className = 'status-indicator disconnected';
             serverStatusText.textContent = 'Serveur: Hors ligne';
             serverStatusText.className = 'status-offline';
+            baileysStatusElement.textContent = '❌ HORS LIGNE';
+            baileysDescriptionElement.textContent = 'Serveur inaccessible';
+            baileysStatusElement.style.color = '#ef4444';
+            alertTextElement.textContent = 'Serveur inaccessible. Veuillez vérifier la connexion.';
+            serverAlertElement.style.display = 'block';
+            pairButton.disabled = true;
+            whatsappAvailable = false;
             return false;
         }
         
         // Mettre à jour les informations serveur
         function updateServerInfo(data) {
-            if (data.baileys) {
-                baileysStatusElement.textContent = data.baileys === 'loaded' ? '✅ ACTIF' : '❌ DÉMO';
-                baileysDescriptionElement.textContent = data.baileys === 'loaded' ? 'API WhatsApp disponible' : 'Mode démo seulement';
-                serverModeElement.textContent = `Mode: ${data.baileys === 'loaded' ? 'RÉEL' : 'DÉMO'}`;
-            }
-            
             if (data.uptime) {
                 const hours = Math.floor(data.uptime / 3600);
                 const minutes = Math.floor((data.uptime % 3600) / 60);
                 serverUptimeElement.textContent = `Uptime: ${hours}h ${minutes}m`;
             }
-            
-            if (data.status) {
-                baileysStatusElement.style.color = data.status === 'healthy' ? '#10b981' : '#ef4444';
-            }
         }
         
-        // Fonction pour charger la liste des bots RÉELS
+        // Fonction pour charger la liste des bots
         async function loadBots() {
             try {
                 loadingBotsElement.classList.add('show');
@@ -734,20 +740,16 @@
                 
                 const data = await response.json();
                 
-                // Masquer le chargement
                 loadingBotsElement.classList.remove('show');
                 
-                // Vérifier si c'est une réponse réelle
                 if (!data.success) {
-                    showError("Erreur lors du chargement des bots");
+                    showError("Erreur lors du chargement des sessions");
                     return;
                 }
                 
-                // Mettre à jour les compteurs
                 activeBotsCountElement.textContent = data.activeBots ? data.activeBots.length : 0;
-                totalBotsElement.textContent = `${data.count || 0} bots`;
+                totalBotsElement.textContent = `${data.count || 0} sessions`;
                 
-                // Afficher/masquer le message "aucun bot"
                 if (!data.activeBots || data.activeBots.length === 0) {
                     noBotsElement.style.display = 'block';
                     botListElement.innerHTML = '';
@@ -759,7 +761,7 @@
             } catch (error) {
                 console.error('Erreur chargement bots:', error);
                 loadingBotsElement.classList.remove('show');
-                showError("Impossible de charger la liste des bots");
+                showError("Impossible de charger la liste des sessions");
             }
         }
         
@@ -771,7 +773,6 @@
                 const botElement = document.createElement('div');
                 botElement.className = 'bot-item';
                 
-                // Déterminer l'emoji en fonction du code pays
                 let emoji = '🤖';
                 let countryName = 'WhatsApp';
                 
@@ -793,14 +794,13 @@
                 }
                 
                 const isConnected = bot.connected !== false;
-                const isDemo = bot.demo === true;
                 
                 botElement.innerHTML = `
                     <div class="bot-avatar">
                         ${emoji}
                     </div>
                     <div class="bot-info">
-                        <div class="bot-name">${countryName} ${isDemo ? '(Démo)' : ''}</div>
+                        <div class="bot-name">${countryName}</div>
                         <div class="bot-number">${bot.number}</div>
                         <div class="bot-status">
                             <span class="status-indicator ${isConnected ? 'connected' : 'disconnected'}"></span>
@@ -810,11 +810,9 @@
                         </div>
                     </div>
                     <div class="bot-actions">
-                        ${!isDemo ? `
-                        <button class="btn-action delete" onclick="deleteBot('${bot.number}')" title="Supprimer">
+                        <button class="btn-action delete" onclick="deleteSession('${bot.number}')" title="Supprimer">
                             <i class="fas fa-trash"></i>
                         </button>
-                        ` : ''}
                     </div>
                 `;
                 
@@ -822,7 +820,7 @@
             });
         }
         
-        // Fonction pour générer un code WhatsApp RÉEL
+        // Fonction pour générer un code WhatsApp
         async function generatePairingCode() {
             const phoneNumber = whatsappNumberInput.value.trim();
             
@@ -830,6 +828,12 @@
             const validation = validatePhoneNumber(phoneNumber);
             if (!validation.valid) {
                 showError(validation.error);
+                return;
+            }
+            
+            // Vérifier que WhatsApp est disponible
+            if (!whatsappAvailable) {
+                showError("WhatsApp n'est pas disponible actuellement");
                 return;
             }
             
@@ -851,40 +855,16 @@
                     body: JSON.stringify({ number: validation.number })
                 });
                 
-                if (!response.ok) {
-                    throw new Error(`Erreur serveur: ${response.status}`);
-                }
-                
                 const data = await response.json();
                 
-                // Vérifier la réponse
-                if (!data.success) {
-                    throw new Error(data.error || 'Erreur lors de la génération du code');
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || data.message || 'Erreur lors de la génération du code');
                 }
                 
                 // Afficher le résultat
                 currentPairingCode = data.pairingCode;
                 pairingCodeElement.textContent = currentPairingCode;
                 resultNumberElement.textContent = data.number || validation.number;
-                
-                // Mettre à jour le badge
-                if (data.demo_mode === true) {
-                    resultBadgeElement.textContent = 'MODE DÉMO';
-                    resultBadgeElement.className = 'badge badge-demo';
-                } else {
-                    resultBadgeElement.textContent = data.real_whatsapp ? 'VRAI CODE WHATSAPP' : 'CODE GÉNÉRÉ';
-                    resultBadgeElement.className = 'badge badge-real';
-                }
-                
-                // Mettre à jour les instructions
-                if (data.instructions && Array.isArray(data.instructions)) {
-                    instructionsListElement.innerHTML = '';
-                    data.instructions.forEach(instruction => {
-                        const li = document.createElement('li');
-                        li.textContent = instruction;
-                        instructionsListElement.appendChild(li);
-                    });
-                }
                 
                 // Afficher le résultat
                 pairingResultElement.classList.add('show');
@@ -904,9 +884,9 @@
             }
         }
         
-        // Fonction pour supprimer un bot
-        async function deleteBot(phoneNumber) {
-            if (!confirm(`Voulez-vous vraiment supprimer le bot ${phoneNumber} ?`)) {
+        // Fonction pour supprimer une session
+        async function deleteSession(phoneNumber) {
+            if (!confirm(`Voulez-vous vraiment supprimer la session ${phoneNumber} ?`)) {
                 return;
             }
             
@@ -929,8 +909,8 @@
                 }
                 
             } catch (error) {
-                console.error('Erreur suppression bot:', error);
-                showError("Impossible de supprimer le bot");
+                console.error('Erreur suppression session:', error);
+                showError("Impossible de supprimer la session");
             }
         }
         
@@ -970,7 +950,6 @@
                     const data = await response.json();
                     if (data.success && data.stats) {
                         serverMemoryElement.textContent = `Mémoire: ${data.stats.memory_usage || '--'}`;
-                        serverModeElement.textContent = `Mode: ${data.stats.baileys_status === 'loaded' ? 'RÉEL' : 'DÉMO'}`;
                     }
                 }
             } catch (error) {
@@ -994,15 +973,16 @@
             copyCodeButton.addEventListener('click', copyToClipboard);
             closeResultButton.addEventListener('click', closeResult);
             
-            // Permettre d'appuyer sur Entrée dans le champ de numéro
+            // Permettre d'appuyer sur Entrée
             whatsappNumberInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter' && !isPairing) {
+                if (e.key === 'Enter' && !isPairing && whatsappAvailable) {
                     generatePairingCode();
                 }
             });
             
-            // Rafraîchir automatiquement toutes les 30 secondes
+            // Rafraîchir automatiquement
             setInterval(() => {
+                checkServerStatus();
                 loadBots();
                 loadServerStats();
             }, 30000);
@@ -1011,8 +991,8 @@
         // Démarrer l'application
         document.addEventListener('DOMContentLoaded', init);
         
-        // Exposer deleteBot globalement
-        window.deleteBot = deleteBot;
+        // Exposer deleteSession globalement
+        window.deleteSession = deleteSession;
     </script>
 </body>
 </html>
