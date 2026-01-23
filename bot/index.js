@@ -1,39 +1,39 @@
 console.log('🔧 HEXGATE V3 - Vérification des dépendances...');
-console.log('📦 Version correcte: @whiskeysockets/baileys (avec un seul L)');
 
-const requiredModules = [
-  '@whiskeysockets/baileys',
-  'pino',
-  'fs',
-  'path',
-  'child_process',
-  'readline',
-  'buffer'
-];
 
-const missingModules = [];
+const  requiredModules = [
+    console.log('✅ config.json créé avec valeurs par défaut');'@whiskeysockets/baileys' ,
+  'pino' ,
+  'fs' ,
+  'chemin' ,
+  'processus_enfant' ,
+  'readline' ,
+  'tampon'
+] ;
+
+const  missingModules = [ ] ;
 
 // 📁 CHARGEMENT DE LA CONFIGURATION
-let config = {};
-try {
-  if (fs.existsSync('./config.json')) {
-    config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
-    console.log('✅ Configuration chargée depuis config.json');
-  } else {
-    console.log('⚠️ config.json non trouvé, création avec valeurs par défaut...');
+soit  config = { } ;
+essayer  {
+  si  ( fs . existsSync ( './config.json' ) )  {
+    config = JSON . parse ( fs . readFileSync ( './config.json' , 'utf8' ) ) ;
+    consoler . log ( '✅ Configuration chargée depuis config.json' ) ;
+  }  autre  {
+    consoler . log ( '⚠️ config.json non trouvé, création avec valeurs par défaut...' ) ;
     config = {
-      prefix: ".",
-      ownerNumber: "243983205767", // NUMÉRO MODIFIÉ
-      botPublic: false,
-      fakeRecording: false,
-      antiLink: true,
-      alwaysOnline: true,
-      logLevel: "silent",
-      telegramLink: "https://t.me/hextechcar",
-      botImageUrl: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTyERDdGHGjmXPv_6tCBIChmD-svWkJatQlpzfxY5WqFg&s=10"
-    };
-    fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-    console.log('✅ config.json créé avec valeurs par défaut');
+      préfixe : "." ,
+      OwnerNumber : "243983205767" , // NUMÉRO MODIFIÉ
+      botPublic : faux ,
+      fauxenregistrement : faux ,
+      antiLink : vrai ,
+      toujoursEnLigne : vrai ,
+      Niveau de journalisation : "silencieux" ,
+      Lien Telegram : "https://t.me/hextechcar" ,
+      botImageUrl : "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTyERDdGHGjmXPv_6tCBIChmD-svWkJatQlpzfxY5WqFg&s=10"
+    } ;
+    fs.writeFileSync ( ' ./ config.json ', JSON.stringify(config, null, 2));, JSON.stringify(config, null, 2));
+    console.log('✅ config.json créé avec valeurs par défaut');console.log('✅ config.json créé avec valeurs par défaut');
   }
 } catch (error) {
   console.log('❌ Erreur chargement config.json:', error.message);
