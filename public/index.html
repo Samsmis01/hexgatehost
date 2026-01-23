@@ -14,7 +14,7 @@
         }
         
         body {
-            background-color: #0a0e17;
+            background: linear-gradient(135deg, #0a0e17 0%, #1a1f2e 100%);
             color: #e2e8f0;
             min-height: 100vh;
             padding: 20px;
@@ -27,51 +27,77 @@
         }
         
         header {
-            margin-bottom: 30px;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
         
         .logo {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 15px;
             margin-bottom: 10px;
         }
         
         .logo-icon {
-            color: #10b981;
-            font-size: 28px;
+            background: linear-gradient(135deg, #25D366, #128C7E);
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+            box-shadow: 0 4px 12px rgba(37, 211, 102, 0.3);
         }
         
-        .logo h1 {
-            color: #10b981;
-            font-size: 28px;
+        .logo-text h1 {
+            color: #25D366;
+            font-size: 32px;
             font-weight: 700;
             letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #25D366, #128C7E);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
         
         .logo-tagline {
             color: #94a3b8;
-            font-size: 14px;
-            margin-left: 40px;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        
+        .welcome-message {
+            margin-top: 15px;
+            color: #cbd5e1;
+            font-size: 16px;
+            line-height: 1.6;
+            max-width: 800px;
         }
         
         .main-content {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
             margin-bottom: 40px;
         }
         
         .card {
-            background-color: #1e293b;
-            border-radius: 12px;
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
             padding: 25px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-            transition: transform 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
         }
         
         .card:hover {
             transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+            border-color: rgba(37, 211, 102, 0.3);
         }
         
         .card-header {
@@ -82,76 +108,129 @@
         }
         
         .card-title {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 600;
             color: #f8fafc;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .card-icon {
+            color: #25D366;
+            font-size: 20px;
         }
         
         .card-value {
-            font-size: 48px;
-            font-weight: 700;
-            color: #10b981;
+            font-size: 56px;
+            font-weight: 800;
+            color: #25D366;
             margin-bottom: 10px;
+            text-shadow: 0 2px 10px rgba(37, 211, 102, 0.3);
         }
         
         .card-description {
             color: #94a3b8;
             font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            margin-top: 15px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #25D366, #128C7E);
+            border-radius: 4px;
+            transition: width 0.5s ease;
         }
         
         .bot-list-container {
-            grid-column: span 2;
+            grid-column: 1 / -1;
         }
         
         .bot-list-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
         
         .bot-list-title {
-            font-size: 20px;
-            font-weight: 600;
+            font-size: 22px;
+            font-weight: 700;
             color: #f8fafc;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .bot-list-title i {
+            color: #25D366;
         }
         
         .bot-count {
-            background-color: #10b981;
+            background: linear-gradient(135deg, #25D366, #128C7E);
             color: white;
-            padding: 5px 15px;
+            padding: 8px 20px;
             border-radius: 20px;
             font-size: 14px;
-            font-weight: 600;
+            font-weight: 700;
+            box-shadow: 0 4px 12px rgba(37, 211, 102, 0.3);
         }
         
         .bot-list {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
             gap: 20px;
         }
         
         .bot-item {
-            background-color: #1e293b;
-            border-radius: 12px;
+            background: rgba(30, 41, 59, 0.8);
+            border-radius: 14px;
             padding: 20px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-            border-left: 4px solid #10b981;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .bot-item:hover {
+            transform: translateY(-3px);
+            border-color: rgba(37, 211, 102, 0.3);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        }
+        
+        .bot-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: linear-gradient(to bottom, #25D366, #128C7E);
         }
         
         .bot-avatar {
             width: 50px;
             height: 50px;
-            background-color: #0ea5e9;
+            background: linear-gradient(135deg, #25D366, #128C7E);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-size: 20px;
+            font-size: 22px;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 12px rgba(37, 211, 102, 0.3);
         }
         
         .bot-info {
@@ -162,11 +241,13 @@
             font-weight: 600;
             color: #f8fafc;
             margin-bottom: 5px;
+            font-size: 16px;
         }
         
         .bot-number {
             color: #94a3b8;
             font-size: 14px;
+            margin-bottom: 10px;
         }
         
         .bot-status {
@@ -177,11 +258,13 @@
         }
         
         .status-connected {
-            color: #10b981;
+            color: #25D366;
+            font-weight: 600;
         }
         
         .status-disconnected {
             color: #ef4444;
+            font-weight: 600;
         }
         
         .status-indicator {
@@ -191,50 +274,58 @@
         }
         
         .connected {
-            background-color: #10b981;
+            background: #25D366;
+            box-shadow: 0 0 10px rgba(37, 211, 102, 0.5);
         }
         
         .disconnected {
-            background-color: #ef4444;
+            background: #ef4444;
         }
         
         .bot-actions {
             display: flex;
             gap: 8px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
         
         .btn-action {
-            background: none;
-            border: 1px solid #475569;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
             color: #94a3b8;
-            width: 32px;
-            height: 32px;
-            border-radius: 6px;
+            padding: 8px 12px;
+            border-radius: 8px;
             cursor: pointer;
             display: flex;
             align-items: center;
-            justify-content: center;
+            gap: 6px;
+            font-size: 13px;
+            font-weight: 500;
             transition: all 0.3s ease;
+            flex: 1;
+            justify-content: center;
         }
         
         .btn-action:hover {
-            border-color: #10b981;
-            color: #10b981;
+            background: rgba(37, 211, 102, 0.2);
+            color: #25D366;
+            transform: translateY(-2px);
         }
         
         .btn-action.delete:hover {
-            border-color: #ef4444;
+            background: rgba(239, 68, 68, 0.2);
             color: #ef4444;
         }
         
         .pairing-container {
-            grid-column: span 2;
+            grid-column: 1 / -1;
         }
         
         .pairing-form {
             display: flex;
             gap: 15px;
-            margin-top: 15px;
+            margin-top: 20px;
         }
         
         .input-group {
@@ -243,135 +334,70 @@
         
         input[type="text"] {
             width: 100%;
-            padding: 15px;
-            background-color: #334155;
-            border: 1px solid #475569;
-            border-radius: 8px;
+            padding: 16px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
             color: #f8fafc;
             font-size: 16px;
+            transition: all 0.3s ease;
         }
         
         input[type="text"]:focus {
             outline: none;
-            border-color: #10b981;
+            border-color: #25D366;
+            box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.1);
+            background: rgba(255, 255, 255, 0.08);
         }
         
         input[type="text"]::placeholder {
-            color: #94a3b8;
+            color: #64748b;
         }
         
         .btn {
-            padding: 15px 30px;
-            background-color: #10b981;
+            padding: 16px 30px;
+            background: linear-gradient(135deg, #25D366, #128C7E);
             color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: 12px;
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: background-color 0.3s ease;
+            transition: all 0.3s ease;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
+            box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3);
         }
         
         .btn:hover {
-            background-color: #059669;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(37, 211, 102, 0.4);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
         }
         
         .btn:disabled {
-            background-color: #475569;
+            background: #475569;
             cursor: not-allowed;
-        }
-        
-        .btn-delete {
-            background-color: #ef4444;
-            padding: 8px 15px;
-            font-size: 14px;
-        }
-        
-        .btn-delete:hover {
-            background-color: #dc2626;
-        }
-        
-        .pairing-result {
-            margin-top: 25px;
-            padding: 20px;
-            background-color: #1e293b;
-            border-radius: 12px;
-            display: none;
-        }
-        
-        .pairing-result.show {
-            display: block;
-        }
-        
-        .result-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-        
-        .result-title {
-            font-weight: 600;
-            color: #f8fafc;
-            font-size: 18px;
-        }
-        
-        .badge-real {
-            background-color: #10b981;
-            color: white;
-            padding: 5px 10px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-        
-        .pairing-code {
-            font-size: 36px;
-            font-weight: 700;
-            text-align: center;
-            color: #10b981;
-            letter-spacing: 2px;
-            margin: 20px 0;
-            padding: 15px;
-            background-color: rgba(16, 185, 129, 0.1);
-            border-radius: 8px;
-            border: 1px dashed #10b981;
-        }
-        
-        .instructions {
-            background-color: #334155;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 20px;
-        }
-        
-        .instructions-title {
-            font-weight: 600;
-            margin-bottom: 10px;
-            color: #f8fafc;
-        }
-        
-        .instructions-list {
-            padding-left: 20px;
-            color: #cbd5e1;
-        }
-        
-        .instructions-list li {
-            margin-bottom: 8px;
+            transform: none;
+            box-shadow: none;
         }
         
         .server-status {
             display: flex;
             align-items: center;
-            gap: 10px;
-            margin-bottom: 10px;
+            gap: 12px;
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
         }
         
         .status-online {
-            color: #10b981;
+            color: #25D366;
             font-weight: 600;
         }
         
@@ -380,25 +406,25 @@
             font-weight: 600;
         }
         
-        .server-info {
-            display: flex;
-            gap: 15px;
-            margin-top: 10px;
-            flex-wrap: wrap;
+        .status-indicator-large {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
         }
         
-        .info-item {
-            background-color: #334155;
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 12px;
-            color: #94a3b8;
+        .connected-large {
+            background: #25D366;
+            box-shadow: 0 0 15px rgba(37, 211, 102, 0.5);
+        }
+        
+        .disconnected-large {
+            background: #ef4444;
         }
         
         .loading {
             display: none;
             text-align: center;
-            padding: 20px;
+            padding: 30px;
         }
         
         .loading.show {
@@ -406,13 +432,13 @@
         }
         
         .spinner {
-            border: 3px solid #334155;
-            border-top: 3px solid #10b981;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top: 3px solid #25D366;
             border-radius: 50%;
-            width: 30px;
-            height: 30px;
+            width: 40px;
+            height: 40px;
             animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
+            margin: 0 auto 20px;
         }
         
         @keyframes spin {
@@ -421,48 +447,201 @@
         }
         
         .error-message {
-            background-color: rgba(239, 68, 68, 0.1);
+            background: rgba(239, 68, 68, 0.1);
             color: #fecaca;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 15px;
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin-top: 20px;
             display: none;
+            border-left: 4px solid #ef4444;
         }
         
         .error-message.show {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .success-message {
+            background: rgba(37, 211, 102, 0.1);
+            color: #d1fae5;
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin-top: 20px;
+            display: none;
+            border-left: 4px solid #25D366;
+        }
+        
+        .success-message.show {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .pairing-result {
+            margin-top: 30px;
+            padding: 25px;
+            background: rgba(30, 41, 59, 0.9);
+            border-radius: 16px;
+            border: 2px solid rgba(37, 211, 102, 0.3);
+            display: none;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+        }
+        
+        .pairing-result.show {
             display: block;
+            animation: fadeIn 0.5s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .result-title {
+            font-weight: 700;
+            color: #f8fafc;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .badge-real {
+            background: linear-gradient(135deg, #25D366, #128C7E);
+            color: white;
+            padding: 6px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            box-shadow: 0 4px 12px rgba(37, 211, 102, 0.3);
+        }
+        
+        .pairing-code {
+            font-size: 42px;
+            font-weight: 800;
+            text-align: center;
+            color: #25D366;
+            letter-spacing: 3px;
+            margin: 25px 0;
+            padding: 20px;
+            background: rgba(37, 211, 102, 0.1);
+            border-radius: 12px;
+            border: 2px dashed rgba(37, 211, 102, 0.5);
+            text-shadow: 0 2px 10px rgba(37, 211, 102, 0.3);
+        }
+        
+        .instructions {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 25px;
+        }
+        
+        .instructions-title {
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: #f8fafc;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .instructions-list {
+            padding-left: 20px;
+            color: #cbd5e1;
+        }
+        
+        .instructions-list li {
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+        
+        .result-actions {
+            display: flex;
+            gap: 15px;
+            margin-top: 25px;
+            justify-content: flex-end;
+        }
+        
+        .btn-secondary {
+            padding: 12px 25px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #94a3b8;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: #f8fafc;
         }
         
         .no-bots {
-            grid-column: span 2;
             text-align: center;
-            padding: 40px;
+            padding: 50px 20px;
             color: #94a3b8;
         }
         
         .no-bots i {
-            font-size: 48px;
-            margin-bottom: 15px;
-            color: #475569;
+            font-size: 64px;
+            margin-bottom: 20px;
+            color: rgba(255, 255, 255, 0.1);
         }
         
-        .server-alert {
-            background-color: rgba(245, 158, 11, 0.1);
-            color: #fde68a;
-            padding: 15px;
-            border-radius: 8px;
+        .no-bots h3 {
+            color: #f8fafc;
+            margin-bottom: 10px;
+            font-size: 20px;
+        }
+        
+        .server-info {
+            display: flex;
+            gap: 15px;
             margin-top: 15px;
-            border-left: 4px solid #f59e0b;
+            flex-wrap: wrap;
+        }
+        
+        .info-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px 15px;
+            border-radius: 10px;
+            font-size: 12px;
+            color: #94a3b8;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 50px;
+            color: #64748b;
+            font-size: 14px;
+            padding-top: 25px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
         
         @media (max-width: 768px) {
             .main-content {
                 grid-template-columns: 1fr;
-            }
-            
-            .bot-list-container,
-            .pairing-container {
-                grid-column: span 1;
             }
             
             .pairing-form {
@@ -472,6 +651,31 @@
             .bot-list {
                 grid-template-columns: 1fr;
             }
+            
+            .result-actions {
+                flex-direction: column;
+            }
+            
+            .pairing-code {
+                font-size: 32px;
+                letter-spacing: 2px;
+            }
+        }
+        
+        /* Animation pour les nouvelles entrées */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .bot-item {
+            animation: slideIn 0.3s ease;
         }
     </style>
 </head>
@@ -479,59 +683,104 @@
     <div class="container">
         <header>
             <div class="logo">
-                <div class="logo-icon"><i class="fab fa-whatsapp"></i></div>
-                <h1>HexTech WhatsApp</h1>
+                <div class="logo-icon">
+                    <i class="fab fa-whatsapp"></i>
+                </div>
+                <div class="logo-text">
+                    <h1>HexTech</h1>
+                    <div class="logo-tagline">Bonjour google_user_5€ prêt à gérer tes bots ?</div>
+                </div>
             </div>
-            <div class="logo-tagline">Générateur de codes WhatsApp réels</div>
-            <p style="color: #94a3b8; margin-top: 10px; font-size: 15px;">
-                Générez des codes d'appairage WhatsApp officiels - Pas de simulation, pas de démo
-            </p>
+            <div class="welcome-message">
+                Gère tous tes bots en un seul endroit. Surveille les performances, déploie de nouveaux bots et optimise ton automatisation.
+            </div>
         </header>
         
         <div class="main-content">
+            <!-- Carte 1: Sessions Max Bot -->
             <div class="card">
                 <div class="card-header">
-                    <div class="card-title">Statut WhatsApp</div>
-                </div>
-                <div class="card-value" id="baileys-status">...</div>
-                <div class="card-description" id="baileys-description">Connexion WhatsApp</div>
-            </div>
-            
-            <div class="card">
-                <div class="card-header">
-                    <div class="card-title">Sessions Actives</div>
-                </div>
-                <div class="card-value" id="active-bots-count">0</div>
-                <div class="card-description">Sessions WhatsApp connectées</div>
-            </div>
-            
-            <div class="bot-list-container card">
-                <div class="bot-list-header">
-                    <div class="bot-list-title">Sessions WhatsApp</div>
-                    <div class="bot-count" id="total-bots">0 sessions</div>
-                </div>
-                <div class="bot-list" id="bot-list">
-                    <div class="loading" id="loading-bots">
-                        <div class="spinner"></div>
-                        <div>Chargement des sessions...</div>
+                    <div class="card-title">
+                        <i class="fas fa-server card-icon"></i>
+                        Sessions Max Bot
                     </div>
                 </div>
-                <div class="no-bots" id="no-bots" style="display: none;">
-                    <i class="fab fa-whatsapp"></i>
-                    <h3>Aucune session WhatsApp active</h3>
-                    <p>Générez votre premier code WhatsApp ci-dessous</p>
+                <div class="card-value" id="max-sessions">20</div>
+                <div class="card-description">
+                    Limite actuelle de sessions simultanées
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="sessions-progress" style="width: 0%"></div>
                 </div>
             </div>
             
-            <div class="pairing-container card">
-                <div class="card-title">Générer un code WhatsApp</div>
-                <p style="color: #94a3b8; margin-bottom: 15px; font-size: 14px;">
-                    Entrez un numéro WhatsApp international pour générer un code d'appairage réel
-                </p>
+            <!-- Carte 2: Bots Actifs -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fas fa-robot card-icon"></i>
+                        Bots Actifs
+                    </div>
+                </div>
+                <div class="card-value" id="active-bots-count">0</div>
+                <div class="card-description">
+                    Bots actuellement connectés
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="active-progress" style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <!-- Carte 3: Statut WhatsApp -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fab fa-whatsapp card-icon"></i>
+                        Statut WhatsApp
+                    </div>
+                </div>
+                <div class="card-value" id="baileys-status">...</div>
+                <div class="card-description" id="baileys-description">
+                    Connexion WhatsApp en cours
+                </div>
+            </div>
+            
+            <!-- Section: Liste des bots -->
+            <div class="bot-list-container card">
+                <div class="bot-list-header">
+                    <div class="bot-list-title">
+                        <i class="fas fa-list"></i>
+                        Mes Bots WhatsApp
+                    </div>
+                    <div class="bot-count" id="total-bots">0 bots</div>
+                </div>
                 
-                <div id="server-alert" class="server-alert" style="display: none;">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <span id="alert-text">WhatsApp n'est pas disponible actuellement</span>
+                <div class="bot-list" id="bot-list">
+                    <!-- Les bots seront ajoutés ici dynamiquement -->
+                    <div class="loading" id="loading-bots">
+                        <div class="spinner"></div>
+                        <div>Chargement des bots...</div>
+                    </div>
+                </div>
+                
+                <div class="no-bots" id="no-bots" style="display: none;">
+                    <i class="fas fa-robot"></i>
+                    <h3>Aucun bot WhatsApp actif</h3>
+                    <p>Générez votre premier code d'appairage ci-dessous</p>
+                </div>
+            </div>
+            
+            <!-- Section: Génération de code -->
+            <div class="pairing-container card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fas fa-qrcode card-icon"></i>
+                        Ajouter un nouveau bot
+                    </div>
+                </div>
+                
+                <div style="color: #94a3b8; margin-bottom: 20px; font-size: 15px;">
+                    Entrez un numéro WhatsApp international pour générer un code d'appairage
                 </div>
                 
                 <div class="pairing-form">
@@ -539,22 +788,39 @@
                         <input type="text" id="whatsapp-number" placeholder="Ex: +243810000000, +33123456789, +14155552671" maxlength="20">
                     </div>
                     <button class="btn" id="pair-btn">
-                        <i class="fas fa-qrcode"></i> Générer Code WhatsApp
+                        <i class="fas fa-bolt"></i>
+                        Générer Code WhatsApp
                     </button>
                 </div>
                 
                 <div class="server-status">
-                    <span class="status-indicator" id="server-status-indicator"></span>
+                    <span class="status-indicator-large" id="server-status-indicator"></span>
                     <span id="server-status-text">Statut serveur: Vérification...</span>
                 </div>
                 
                 <div class="server-info">
-                    <div class="info-item" id="server-uptime">Uptime: --</div>
-                    <div class="info-item" id="server-memory">Mémoire: --</div>
+                    <div class="info-item">
+                        <i class="fas fa-clock"></i>
+                        <span id="server-uptime">Uptime: --</span>
+                    </div>
+                    <div class="info-item">
+                        <i class="fas fa-memory"></i>
+                        <span id="server-memory">Mémoire: --</span>
+                    </div>
+                    <div class="info-item">
+                        <i class="fas fa-plug"></i>
+                        <span id="server-mode">WhatsApp: --</span>
+                    </div>
                 </div>
                 
                 <div class="error-message" id="error-message">
-                    <i class="fas fa-exclamation-triangle"></i> <span id="error-text"></span>
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span id="error-text"></span>
+                </div>
+                
+                <div class="success-message" id="success-message">
+                    <i class="fas fa-check-circle"></i>
+                    <span id="success-text"></span>
                 </div>
                 
                 <div class="loading" id="loading-pair">
@@ -562,20 +828,27 @@
                     <div>Génération du code WhatsApp...</div>
                 </div>
                 
+                <!-- Résultat du pairing -->
                 <div class="pairing-result" id="pairing-result">
                     <div class="result-header">
-                        <div class="result-title">Code WhatsApp généré</div>
+                        <div class="result-title">
+                            <i class="fas fa-check-circle" style="color: #25D366;"></i>
+                            Code WhatsApp généré
+                        </div>
                         <div class="badge-real">VRAI CODE WHATSAPP</div>
                     </div>
                     
-                    <p style="color: #94a3b8; margin-bottom: 15px;">
+                    <div style="color: #94a3b8; margin-bottom: 20px;">
                         Pour le numéro: <span id="result-number" style="color: #f8fafc; font-weight: 600;"></span>
-                    </p>
+                    </div>
                     
                     <div class="pairing-code" id="pairing-code">XXXX-XXXX</div>
                     
                     <div class="instructions">
-                        <div class="instructions-title">Instructions d'appairage WhatsApp:</div>
+                        <div class="instructions-title">
+                            <i class="fas fa-info-circle"></i>
+                            Instructions d'appairage:
+                        </div>
                         <ol class="instructions-list" id="instructions-list">
                             <li>Allez sur <strong>https://web.whatsapp.com</strong></li>
                             <li>Cliquez sur <strong>'Connecter avec un numéro de téléphone'</strong></li>
@@ -585,31 +858,38 @@
                         </ol>
                     </div>
                     
-                    <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
-                        <button class="btn btn-delete" id="close-result">
-                            <i class="fas fa-times"></i> Fermer
+                    <div class="result-actions">
+                        <button class="btn-secondary" id="close-result">
+                            <i class="fas fa-times"></i>
+                            Fermer
                         </button>
                         <button class="btn" id="copy-code">
-                            <i class="fas fa-copy"></i> Copier le code
+                            <i class="fas fa-copy"></i>
+                            Copier le code
                         </button>
                     </div>
                 </div>
             </div>
         </div>
         
-        <footer style="text-align: center; margin-top: 40px; color: #64748b; font-size: 14px; padding-top: 20px; border-top: 1px solid #1e293b;">
-            <p>HexTech WhatsApp • Vrais codes WhatsApp seulement • API WhatsApp officielle</p>
+        <footer>
+            <p>HexTech Bot Manager • Utilise l'API WhatsApp officielle • Max 20 sessions simultanées</p>
+            <p style="margin-top: 10px; font-size: 12px; color: #475569;">
+                © 2024 HexTech - Tous droits réservés
+            </p>
         </footer>
     </div>
 
     <script>
         // Configuration
         const SERVER_URL = window.location.origin || 'http://localhost:3000';
+        const MAX_SESSIONS = 20; // Limite à 20 sessions
         
         // Éléments DOM
         const botListElement = document.getElementById('bot-list');
         const activeBotsCountElement = document.getElementById('active-bots-count');
         const totalBotsElement = document.getElementById('total-bots');
+        const maxSessionsElement = document.getElementById('max-sessions');
         const whatsappNumberInput = document.getElementById('whatsapp-number');
         const pairButton = document.getElementById('pair-btn');
         const pairingResultElement = document.getElementById('pairing-result');
@@ -619,6 +899,8 @@
         const loadingBotsElement = document.getElementById('loading-bots');
         const errorMessageElement = document.getElementById('error-message');
         const errorTextElement = document.getElementById('error-text');
+        const successMessageElement = document.getElementById('success-message');
+        const successTextElement = document.getElementById('success-text');
         const closeResultButton = document.getElementById('close-result');
         const copyCodeButton = document.getElementById('copy-code');
         const serverStatusIndicator = document.getElementById('server-status-indicator');
@@ -628,15 +910,18 @@
         const baileysDescriptionElement = document.getElementById('baileys-description');
         const serverUptimeElement = document.getElementById('server-uptime');
         const serverMemoryElement = document.getElementById('server-memory');
-        const serverAlertElement = document.getElementById('server-alert');
-        const alertTextElement = document.getElementById('alert-text');
+        const serverModeElement = document.getElementById('server-mode');
+        const sessionsProgressElement = document.getElementById('sessions-progress');
+        const activeProgressElement = document.getElementById('active-progress');
         
         // Variables d'état
         let isPairing = false;
         let currentPairingCode = '';
         let whatsappAvailable = false;
+        let activeBotsCount = 0;
+        let totalSessions = 0;
         
-        // Fonction pour valider le numéro de téléphone
+        // Fonction pour valider le numéro
         function validatePhoneNumber(number) {
             if (!number) return { valid: false, error: "Veuillez entrer un numéro WhatsApp" };
             
@@ -648,7 +933,7 @@
             if (!internationalRegex.test(cleaned) && !localRegex.test(cleaned)) {
                 return { 
                     valid: false, 
-                    error: "Format invalide. Exemples: +243810000000" 
+                    error: "Format invalide. Ex: +243810000000, 33123456789" 
                 };
             }
             
@@ -659,15 +944,22 @@
         function showError(message) {
             errorTextElement.textContent = message;
             errorMessageElement.classList.add('show');
+            successMessageElement.classList.remove('show');
             
             setTimeout(() => {
                 errorMessageElement.classList.remove('show');
             }, 5000);
         }
         
-        // Fonction pour masquer l'erreur
-        function hideError() {
+        // Fonction pour afficher un succès
+        function showSuccess(message) {
+            successTextElement.textContent = message;
+            successMessageElement.classList.add('show');
             errorMessageElement.classList.remove('show');
+            
+            setTimeout(() => {
+                successMessageElement.classList.remove('show');
+            }, 3000);
         }
         
         // Fonction pour vérifier le statut du serveur
@@ -680,23 +972,22 @@
                     whatsappAvailable = data.baileys === 'loaded';
                     
                     if (whatsappAvailable) {
-                        serverStatusIndicator.className = 'status-indicator connected';
+                        serverStatusIndicator.className = 'status-indicator-large connected-large';
                         serverStatusText.textContent = 'WhatsApp: En ligne';
                         serverStatusText.className = 'status-online';
                         baileysStatusElement.textContent = '✅ ACTIF';
                         baileysDescriptionElement.textContent = 'API WhatsApp disponible';
-                        baileysStatusElement.style.color = '#10b981';
-                        serverAlertElement.style.display = 'none';
+                        baileysStatusElement.style.color = '#25D366';
+                        serverModeElement.textContent = 'WhatsApp: ✅';
                         pairButton.disabled = false;
                     } else {
-                        serverStatusIndicator.className = 'status-indicator disconnected';
+                        serverStatusIndicator.className = 'status-indicator-large disconnected-large';
                         serverStatusText.textContent = 'WhatsApp: Hors ligne';
                         serverStatusText.className = 'status-offline';
                         baileysStatusElement.textContent = '❌ HORS LIGNE';
                         baileysDescriptionElement.textContent = 'API WhatsApp indisponible';
                         baileysStatusElement.style.color = '#ef4444';
-                        alertTextElement.textContent = 'WhatsApp n\'est pas disponible actuellement. Veuillez réessayer plus tard.';
-                        serverAlertElement.style.display = 'block';
+                        serverModeElement.textContent = 'WhatsApp: ❌';
                         pairButton.disabled = true;
                     }
                     
@@ -708,14 +999,13 @@
             }
             
             // Échec
-            serverStatusIndicator.className = 'status-indicator disconnected';
+            serverStatusIndicator.className = 'status-indicator-large disconnected-large';
             serverStatusText.textContent = 'Serveur: Hors ligne';
             serverStatusText.className = 'status-offline';
             baileysStatusElement.textContent = '❌ HORS LIGNE';
             baileysDescriptionElement.textContent = 'Serveur inaccessible';
             baileysStatusElement.style.color = '#ef4444';
-            alertTextElement.textContent = 'Serveur inaccessible. Veuillez vérifier la connexion.';
-            serverAlertElement.style.display = 'block';
+            serverModeElement.textContent = 'Serveur: ❌';
             pairButton.disabled = true;
             whatsappAvailable = false;
             return false;
@@ -743,12 +1033,22 @@
                 loadingBotsElement.classList.remove('show');
                 
                 if (!data.success) {
-                    showError("Erreur lors du chargement des sessions");
+                    showError("Erreur lors du chargement des bots");
                     return;
                 }
                 
-                activeBotsCountElement.textContent = data.activeBots ? data.activeBots.length : 0;
-                totalBotsElement.textContent = `${data.count || 0} sessions`;
+                activeBotsCount = data.activeBots ? data.activeBots.length : 0;
+                totalSessions = data.totalSessions || 0;
+                
+                activeBotsCountElement.textContent = activeBotsCount;
+                totalBotsElement.textContent = `${activeBotsCount} bots`;
+                
+                // Mettre à jour les barres de progression
+                const sessionPercentage = Math.min((totalSessions / MAX_SESSIONS) * 100, 100);
+                const activePercentage = Math.min((activeBotsCount / MAX_SESSIONS) * 100, 100);
+                
+                sessionsProgressElement.style.width = `${sessionPercentage}%`;
+                activeProgressElement.style.width = `${activePercentage}%`;
                 
                 if (!data.activeBots || data.activeBots.length === 0) {
                     noBotsElement.style.display = 'block';
@@ -758,10 +1058,20 @@
                     renderBots(data.activeBots);
                 }
                 
+                // Mettre à jour les stats serveur
+                updateServerStats(data);
+                
             } catch (error) {
                 console.error('Erreur chargement bots:', error);
                 loadingBotsElement.classList.remove('show');
-                showError("Impossible de charger la liste des sessions");
+                showError("Impossible de charger la liste des bots");
+            }
+        }
+        
+        // Mettre à jour les stats serveur
+        function updateServerStats(data) {
+            if (data.stats) {
+                serverMemoryElement.textContent = `Mémoire: ${data.stats.memory_usage || '--'}`;
             }
         }
         
@@ -794,13 +1104,14 @@
                 }
                 
                 const isConnected = bot.connected !== false;
+                const isBotStarted = bot.botStarted === true;
                 
                 botElement.innerHTML = `
                     <div class="bot-avatar">
                         ${emoji}
                     </div>
                     <div class="bot-info">
-                        <div class="bot-name">${countryName}</div>
+                        <div class="bot-name">${countryName}${isBotStarted ? ' 🤖' : ''}</div>
                         <div class="bot-number">${bot.number}</div>
                         <div class="bot-status">
                             <span class="status-indicator ${isConnected ? 'connected' : 'disconnected'}"></span>
@@ -810,8 +1121,21 @@
                         </div>
                     </div>
                     <div class="bot-actions">
+                        ${!isBotStarted && isConnected ? `
+                        <button class="btn-action" onclick="startBot('${bot.number}')" title="Démarrer le bot">
+                            <i class="fas fa-play"></i>
+                            Démarrer
+                        </button>
+                        ` : ''}
+                        ${isBotStarted ? `
+                        <button class="btn-action delete" onclick="stopBot('${bot.number}')" title="Arrêter le bot">
+                            <i class="fas fa-stop"></i>
+                            Arrêter
+                        </button>
+                        ` : ''}
                         <button class="btn-action delete" onclick="deleteSession('${bot.number}')" title="Supprimer">
                             <i class="fas fa-trash"></i>
+                            Supprimer
                         </button>
                     </div>
                 `;
@@ -831,6 +1155,12 @@
                 return;
             }
             
+            // Vérifier la limite de sessions
+            if (totalSessions >= MAX_SESSIONS) {
+                showError(`Limite de ${MAX_SESSIONS} sessions atteinte. Supprimez des sessions existantes.`);
+                return;
+            }
+            
             // Vérifier que WhatsApp est disponible
             if (!whatsappAvailable) {
                 showError("WhatsApp n'est pas disponible actuellement");
@@ -842,11 +1172,11 @@
             pairButton.disabled = true;
             pairButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Génération...';
             loadingPairElement.classList.add('show');
-            hideError();
+            errorMessageElement.classList.remove('show');
+            successMessageElement.classList.remove('show');
             pairingResultElement.classList.remove('show');
             
             try {
-                // Envoyer la requête au serveur
                 const response = await fetch(`${SERVER_URL}/pair`, {
                     method: 'POST',
                     headers: {
@@ -868,9 +1198,15 @@
                 
                 // Afficher le résultat
                 pairingResultElement.classList.add('show');
+                showSuccess("Code WhatsApp généré avec succès !");
                 
                 // Recharger la liste des bots
                 loadBots();
+                
+                // Focaliser sur le bouton copier
+                setTimeout(() => {
+                    copyCodeButton.focus();
+                }, 100);
                 
             } catch (error) {
                 console.error('Erreur génération code:', error);
@@ -879,8 +1215,54 @@
                 // Réactiver le bouton
                 isPairing = false;
                 pairButton.disabled = false;
-                pairButton.innerHTML = '<i class="fas fa-qrcode"></i> Générer Code WhatsApp';
+                pairButton.innerHTML = '<i class="fas fa-bolt"></i> Générer Code WhatsApp';
                 loadingPairElement.classList.remove('show');
+            }
+        }
+        
+        // Fonction pour démarrer un bot
+        async function startBot(phoneNumber) {
+            try {
+                showSuccess(`Démarrage du bot ${phoneNumber}...`);
+                
+                const response = await fetch(`${SERVER_URL}/start-bot/${encodeURIComponent(phoneNumber)}`, {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showSuccess(`✅ Bot ${phoneNumber} démarré`);
+                    loadBots();
+                } else {
+                    showError(data.error || "Erreur démarrage bot");
+                }
+            } catch (error) {
+                console.error('Erreur démarrage bot:', error);
+                showError("Impossible de démarrer le bot");
+            }
+        }
+        
+        // Fonction pour arrêter un bot
+        async function stopBot(phoneNumber) {
+            try {
+                showSuccess(`Arrêt du bot ${phoneNumber}...`);
+                
+                const response = await fetch(`${SERVER_URL}/stop-bot/${encodeURIComponent(phoneNumber)}`, {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showSuccess(`✅ Bot ${phoneNumber} arrêté`);
+                    loadBots();
+                } else {
+                    showError(data.error || "Erreur arrêt bot");
+                }
+            } catch (error) {
+                console.error('Erreur arrêt bot:', error);
+                showError("Impossible d'arrêter le bot");
             }
         }
         
@@ -895,14 +1277,10 @@
                     method: 'DELETE'
                 });
                 
-                if (!response.ok) {
-                    throw new Error('Erreur lors de la suppression');
-                }
-                
                 const data = await response.json();
                 
                 if (data.success) {
-                    // Recharger la liste
+                    showSuccess(`✅ Session ${phoneNumber} supprimée`);
                     loadBots();
                 } else {
                     showError(data.error || 'Erreur lors de la suppression');
@@ -914,7 +1292,7 @@
             }
         }
         
-        // Fonction pour copier le code dans le presse-papier
+        // Fonction pour copier le code
         function copyToClipboard() {
             if (!currentPairingCode) return;
             
@@ -922,12 +1300,14 @@
                 .then(() => {
                     const originalText = copyCodeButton.innerHTML;
                     copyCodeButton.innerHTML = '<i class="fas fa-check"></i> Copié !';
-                    copyCodeButton.style.backgroundColor = '#10b981';
+                    copyCodeButton.style.background = 'linear-gradient(135deg, #10b981, #059669)';
                     
                     setTimeout(() => {
                         copyCodeButton.innerHTML = '<i class="fas fa-copy"></i> Copier le code';
-                        copyCodeButton.style.backgroundColor = '';
+                        copyCodeButton.style.background = '';
                     }, 2000);
+                    
+                    showSuccess("Code copié dans le presse-papier !");
                 })
                 .catch(err => {
                     console.error('Erreur copie:', err);
@@ -940,6 +1320,7 @@
             pairingResultElement.classList.remove('show');
             whatsappNumberInput.value = '';
             whatsappNumberInput.focus();
+            showSuccess("Prêt pour un nouveau code");
         }
         
         // Fonction pour obtenir les statistiques serveur
@@ -959,6 +1340,9 @@
         
         // Initialisation
         async function init() {
+            // Mettre à jour la limite de sessions
+            maxSessionsElement.textContent = MAX_SESSIONS;
+            
             // Vérifier le statut du serveur
             await checkServerStatus();
             
@@ -986,12 +1370,19 @@
                 loadBots();
                 loadServerStats();
             }, 30000);
+            
+            // Animation de bienvenue
+            setTimeout(() => {
+                showSuccess("Bienvenue sur HexTech Bot Manager !");
+            }, 1000);
         }
         
         // Démarrer l'application
         document.addEventListener('DOMContentLoaded', init);
         
-        // Exposer deleteSession globalement
+        // Exposer les fonctions globalement
+        window.startBot = startBot;
+        window.stopBot = stopBot;
         window.deleteSession = deleteSession;
     </script>
 </body>
