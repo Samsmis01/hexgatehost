@@ -1,837 +1,328 @@
-// server.js - VERSION ULTIME CORRIGÉE
-import express from "express";
-import cors from "cors";
-import bodyParser from "body-parser";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-import { spawn } from "child_process";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const express = require('express');
+const http = require('http');
+const path = require('path');
+const fs = require('fs');
+const { spawn } = require('child_process');
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
 // Middleware
-app.use(cors());
-app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static('public'));
 
-// 📁 Dossiers
-const SESSIONS_DIR = path.join(__dirname, "sessions");
-const BOT_DIR = path.join(__dirname, "bot");
+// Stockage des sessions
+const sessions = new Map();
+const bots = new Map();
 
-// Créer les dossiers nécessaires
-[ SESSIONS_DIR ].forEach(dir => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-    console.log(`📁 Dossier créé: ${dir}`);
-  }
-});
-
-// 🎯 Variables globales
-let baileysAvailable = false;
-let Baileys = null;
-let activeBots = new Map();
-let botProcesses = new Map();
-
-// 🔧 Fonction pour charger Baileys
-async function loadBaileys() {
-  if (Baileys && baileysAvailable) return true;
-  
-  console.log("🔄 Chargement de Baileys...");
-  
-  try {
-    // Essayer ES module d'abord
-    const module = await import("@whiskeysockets/baileys");
-    Baileys = module;
-    
-    if (Baileys && Baileys.makeWASocket) {
-      baileysAvailable = true;
-      console.log("✅ Baileys chargé (ES Module)");
-      return true;
-    }
-  } catch (e) {
-    console.log("⚠️ ES Module échoué, essai CommonJS...");
-    
-    try {
-      const { createRequire } = await import("module");
-      const require = createRequire(import.meta.url);
-      Baileys = require("@whiskeysockets/baileys");
-      
-      if (Baileys && Baileys.makeWASocket) {
-        baileysAvailable = true;
-        console.log("✅ Baileys chargé (CommonJS)");
-        return true;
-      }
-    } catch (e2) {
-      console.log("❌ CommonJS échoué:", e2.message);
-    }
-  }
-  
-  console.log("❌ Baileys non disponible");
-  baileysAvailable = false;
-  return false;
-}
-
-// 🚀 Fonction pour démarrer un bot
-async function startBot(phoneNumber, sessionPath) {
-  try {
-    console.log(`🤖 Démarrage du bot pour ${phoneNumber}...`);
-    
-    // Vérifier le dossier bot
-    if (!fs.existsSync(BOT_DIR)) {
-      console.error(`❌ Dossier bot non trouvé: ${BOT_DIR}`);
-      return null;
-    }
-    
-    const botIndexPath = path.join(BOT_DIR, "index.js");
-    if (!fs.existsSync(botIndexPath)) {
-      console.error(`❌ Fichier bot/index.js non trouvé`);
-      return null;
-    }
-    
-    // Créer le dossier sessions dans bot si nécessaire
-    const botSessionsDir = path.join(BOT_DIR, "sessions");
-    if (!fs.existsSync(botSessionsDir)) {
-      fs.mkdirSync(botSessionsDir, { recursive: true });
-    }
-    
-    // Copier la session vers le dossier bot
-    const sessionId = phoneNumber.replace(/[^a-zA-Z0-9]/g, '_');
-    const botSessionPath = path.join(botSessionsDir, sessionId);
-    
-    if (fs.existsSync(sessionPath)) {
-      // Nettoyer l'ancienne session si elle existe
-      if (fs.existsSync(botSessionPath)) {
-        fs.rmSync(botSessionPath, { recursive: true, force: true });
-      }
-      // Copier la nouvelle session
-      fs.cpSync(sessionPath, botSessionPath, { recursive: true });
-      console.log(`📋 Session copiée vers bot: ${botSessionPath}`);
-    }
-    
-    // Préparer l'environnement
-    const env = {
-      ...process.env,
-      WHATSAPP_NUMBER: phoneNumber,
-      SESSION_NAME: sessionId,
-      NODE_ENV: "production",
-      // Désactiver les logs inutiles
-      DEBUG: "",
-      NODE_OPTIONS: "--max-old-space-size=512"
-    };
-    
-    // Démarrer le processus
-    console.log(`🚀 Lancement: node index.js dans ${BOT_DIR}`);
-    const botProcess = spawn("node", ["index.js"], {
-      cwd: BOT_DIR,
-      env: env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      detached: false
-    });
-    
-    // Stocker le processus
-    botProcesses.set(phoneNumber, botProcess);
-    
-    // Gérer les logs
-    botProcess.stdout.on('data', (data) => {
-      const output = data.toString().trim();
-      if (output) {
-        console.log(`[Bot ${phoneNumber}]: ${output}`);
-      }
-    });
-    
-    botProcess.stderr.on('data', (data) => {
-      const error = data.toString().trim();
-      if (error && !error.includes('ExperimentalWarning')) {
-        console.error(`[Bot ${phoneNumber} ERROR]: ${error}`);
-      }
-    });
-    
-    botProcess.on('close', (code) => {
-      console.log(`[Bot ${phoneNumber}] Processus terminé (code: ${code})`);
-      botProcesses.delete(phoneNumber);
-      
-      // Mettre à jour le statut
-      if (activeBots.has(phoneNumber)) {
-        activeBots.get(phoneNumber).botStarted = false;
-      }
-    });
-    
-    botProcess.on('error', (err) => {
-      console.error(`[Bot ${phoneNumber} PROCESS ERROR]:`, err.message);
-      botProcesses.delete(phoneNumber);
-    });
-    
-    console.log(`✅ Bot démarré pour ${phoneNumber} (PID: ${botProcess.pid})`);
-    
-    // Mettre à jour les informations
-    if (activeBots.has(phoneNumber)) {
-      const bot = activeBots.get(phoneNumber);
-      bot.botStarted = true;
-      bot.botPid = botProcess.pid;
-      bot.botProcess = botProcess;
-    }
-    
-    return botProcess;
-    
-  } catch (error) {
-    console.error(`❌ Erreur démarrage bot ${phoneNumber}:`, error.message);
-    return null;
-  }
-}
-
-// 🛑 Fonction pour arrêter un bot
-async function stopBot(phoneNumber) {
-  try {
-    if (botProcesses.has(phoneNumber)) {
-      const botProcess = botProcesses.get(phoneNumber);
-      console.log(`🛑 Arrêt du bot ${phoneNumber} (PID: ${botProcess.pid})...`);
-      
-      // Envoyer SIGTERM
-      botProcess.kill('SIGTERM');
-      
-      // Attendre puis forcer si nécessaire
-      setTimeout(() => {
-        if (botProcesses.has(phoneNumber)) {
-          console.log(`⚠️  Forçage arrêt bot ${phoneNumber}`);
-          botProcess.kill('SIGKILL');
-        }
-      }, 3000);
-      
-      botProcesses.delete(phoneNumber);
-      
-      // Mettre à jour le statut
-      if (activeBots.has(phoneNumber)) {
-        activeBots.get(phoneNumber).botStarted = false;
-      }
-      
-      console.log(`✅ Bot ${phoneNumber} arrêté`);
-      return true;
-    }
-    return false;
-  } catch (error) {
-    console.error(`❌ Erreur arrêt bot ${phoneNumber}:`, error.message);
-    return false;
-  }
-}
-
-// 🌐 ROUTE PRINCIPALE
-app.get("/", (req, res) => {
-  const domain = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
-  
-  res.json({
-    success: true,
-    message: "🤖 WhatsApp Bot Server",
-    version: "3.0.0",
-    domain: domain,
-    status: "online",
-    baileys_available: baileysAvailable,
-    bots_running: botProcesses.size,
-    endpoints: {
-      pairing: "POST /pair",
-      start_bot: "POST /start-bot/:number",
-      stop_bot: "POST /stop-bot/:number",
-      activeBots: "GET /active-bots",
-      stats: "GET /stats",
-      health: "GET /health",
-      panel: "GET /panel"
-    },
-    timestamp: new Date().toISOString()
-  });
-});
-
-// 🩺 HEALTH CHECK (important pour Render)
-app.get("/health", (req, res) => {
-  res.json({
-    success: true,
-    status: "healthy",
-    baileys: baileysAvailable ? "loaded" : "not_loaded",
-    bots_running: botProcesses.size,
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    memory: process.memoryUsage()
-  });
-});
-
-// 🛠️ Fonction pour valider les numéros
-function validateAndFormatPhoneNumber(number) {
-  if (!number || typeof number !== 'string') {
-    return { valid: false, error: "Numéro requis" };
-  }
-  
-  let cleaned = number.replace(/[^\d+]/g, '');
-  
-  const hasPlus = cleaned.startsWith('+');
-  if (hasPlus) {
-    cleaned = cleaned.substring(1);
-  }
-  
-  if (cleaned.length < 4) {
-    return { valid: false, error: "Numéro trop court" };
-  }
-  
-  const formatted = hasPlus ? `+${cleaned}` : cleaned;
-  
-  return {
-    valid: true,
-    original: number,
-    formatted: formatted
-  };
-}
-
-// 📱 ROUTE PAIRING - CORRIGÉE (évite sock.ev.once)
-app.post("/pair", async (req, res) => {
-  console.log("📞 Requête pairing reçue");
-  
-  try {
-    let { number } = req.body;
-    
-    if (!number) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "Numéro WhatsApp requis" 
-      });
-    }
-    
-    // Validation
-    const validation = validateAndFormatPhoneNumber(number);
-    if (!validation.valid) {
-      return res.status(400).json({ 
-        success: false, 
-        error: validation.error 
-      });
-    }
-    
-    const formattedNumber = validation.formatted;
-    console.log(`📱 Traitement pour: ${formattedNumber}`);
-    
-    // Charger Baileys
-    if (!Baileys) {
-      await loadBaileys();
-    }
-    
-    if (!baileysAvailable || !Baileys) {
-      console.log("❌ Baileys non disponible");
-      
-      return res.status(503).json({
-        success: false,
-        error: "Service WhatsApp indisponible",
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    console.log(`🔥 Génération code WhatsApp pour: ${formattedNumber}`);
-    
-    // Extraire les fonctions nécessaires
-    const makeWASocket = Baileys.makeWASocket;
-    const useMultiFileAuthState = Baileys.useMultiFileAuthState;
-    const fetchLatestBaileysVersion = Baileys.fetchLatestBaileysVersion;
-    const Browsers = Baileys.Browsers;
-    
-    if (typeof makeWASocket !== "function") {
-      console.error("❌ makeWASocket n'est pas une fonction");
-      return res.status(500).json({
-        success: false,
-        error: "Erreur d'initialisation WhatsApp",
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    // Créer le dossier de session
-    const sessionId = formattedNumber.replace(/[^a-zA-Z0-9]/g, '_');
-    const sessionPath = path.join(SESSIONS_DIR, sessionId);
-    
-    if (!fs.existsSync(sessionPath)) {
-      fs.mkdirSync(sessionPath, { recursive: true });
-    }
-    
-    let sock = null;
-    let pairingCode = null;
-    
-    try {
-      // Charger l'état d'authentification
-      const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
-      
-      // Obtenir la version
-      const { version } = await fetchLatestBaileysVersion();
-      
-      // 🔧 CORRECTION CRITIQUE : Créer un logger simple
-      const logger = {
-        level: 'silent',
-        trace: () => {},
-        debug: () => {},
-        info: () => {},
-        warn: () => {},
-        error: () => {},
-        fatal: () => {}
-      };
-      
-      // Créer la socket
-      sock = makeWASocket({
-        version,
-        logger: logger,
-        printQRInTerminal: false,
-        auth: state,
-        browser: Browsers.ubuntu("Chrome"),
-        markOnlineOnConnect: true,
-        syncFullHistory: false,
-        connectTimeoutMs: 60000,
-        defaultQueryTimeoutMs: 60000,
-        // Options pour éviter les erreurs
-        emitOwnEvents: false,
-        fireInitQueries: true,
-        // Éviter les connexions multiples
-        shouldSyncHistoryMessage: () => false,
-      });
-      
-      // Sauvegarder les credentials
-      if (sock.ev && typeof sock.ev.on === "function") {
-        sock.ev.on("creds.update", saveCreds);
-      }
-      
-      // 🔧 CORRECTION : Utiliser sock.ev.on au lieu de sock.ev.once
-      if (sock.ev && typeof sock.ev.on === "function") {
-        sock.ev.on("connection.update", (update) => {
-          const { connection } = update;
-          if (connection === 'open') {
-            console.log(`✅ WhatsApp connecté pour ${formattedNumber}`);
-          }
-        });
-      }
-      
-      // Attendre que la socket soit prête
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Générer le code de pairing
-      console.log(`🔗 Demande code pour: ${formattedNumber}`);
-      
-      if (typeof sock.requestPairingCode === "function") {
-        pairingCode = await sock.requestPairingCode(formattedNumber);
-        console.log(`✅ Code WhatsApp généré: ${pairingCode}`);
-      } else {
-        throw new Error("requestPairingCode non disponible");
-      }
-      
-      // Stocker le bot
-      activeBots.set(formattedNumber, {
-        number: formattedNumber,
-        connected: true,
-        pairingCode: pairingCode,
-        sessionPath: sessionPath,
-        botStarted: false,
-        timestamp: Date.now()
-      });
-      
-      // Démarrer le bot automatiquement après 5 secondes
-      setTimeout(async () => {
+// Fonction pour démarrer un bot
+async function startBot(sessionId, phoneNumber = null) {
+    return new Promise((resolve, reject) => {
         try {
-          console.log(`🤖 Démarrage automatique du bot pour ${formattedNumber}...`);
-          await startBot(formattedNumber, sessionPath);
-        } catch (botError) {
-          console.error(`❌ Erreur démarrage auto bot:`, botError.message);
+            // Vérifier si le bot existe déjà
+            if (bots.has(sessionId)) {
+                const existingBot = bots.get(sessionId);
+                if (existingBot.process && !existingBot.process.killed) {
+                    return resolve({ 
+                        status: 'running', 
+                        message: 'Bot déjà en cours d\'exécution',
+                        sessionId 
+                    });
+                }
+            }
+
+            // Créer un dossier de session si nécessaire
+            const sessionPath = path.join(__dirname, 'sessions', sessionId);
+            if (!fs.existsSync(sessionPath)) {
+                fs.mkdirSync(sessionPath, { recursive: true });
+            }
+
+            // Copier le fichier index.js du bot
+            const botFilePath = path.join(sessionPath, 'index.js');
+            if (!fs.existsSync(botFilePath)) {
+                const botSource = fs.readFileSync(path.join(__dirname, 'bot', 'index.js'), 'utf8');
+                fs.writeFileSync(botFilePath, botSource);
+            }
+
+            // Variables d'environnement pour ce bot
+            const env = {
+                ...process.env,
+                SESSION_ID: sessionId,
+                SESSION_PATH: sessionPath,
+                PHONE_NUMBER: phoneNumber,
+                NODE_ENV: 'production',
+                PORT: parseInt(PORT) + parseInt(sessionId.slice(-4)) % 1000 || 8080
+            };
+
+            // Démarrer le processus du bot
+            const botProcess = spawn('node', [botFilePath], {
+                cwd: sessionPath,
+                env: env,
+                stdio: ['pipe', 'pipe', 'pipe']
+            });
+
+            // Stocker les données du bot
+            const botData = {
+                process: botProcess,
+                sessionId: sessionId,
+                phoneNumber: phoneNumber,
+                status: 'starting',
+                startTime: Date.now(),
+                logs: [],
+                pairingCode: null,
+                qrCode: null
+            };
+
+            bots.set(sessionId, botData);
+
+            // Gérer la sortie du bot
+            botProcess.stdout.on('data', (data) => {
+                const output = data.toString();
+                console.log(`[Bot ${sessionId}]: ${output}`);
+                botData.logs.push({ type: 'stdout', message: output, timestamp: Date.now() });
+                
+                // Détecter les QR codes et pairing codes
+                if (output.includes('Code de pairing:')) {
+                    const codeMatch = output.match(/Code de pairing:\s*(\d+)/);
+                    if (codeMatch) {
+                        botData.pairingCode = codeMatch[1];
+                        console.log(`✅ Pairing code détecté pour ${sessionId}: ${botData.pairingCode}`);
+                    }
+                }
+                
+                if (output.includes('QR Code:')) {
+                    const qrMatch = output.match(/QR Code:\s*(.+)/);
+                    if (qrMatch) {
+                        botData.qrCode = qrMatch[1];
+                    }
+                }
+                
+                // Détecter si le bot est connecté
+                if (output.includes('Connecté à WhatsApp')) {
+                    botData.status = 'connected';
+                    botData.connectedAt = Date.now();
+                    console.log(`✅ Bot ${sessionId} connecté avec succès`);
+                }
+            });
+
+            botProcess.stderr.on('data', (data) => {
+                const error = data.toString();
+                console.error(`[Bot ${sessionId} ERROR]: ${error}`);
+                botData.logs.push({ type: 'stderr', message: error, timestamp: Date.now() });
+                
+                if (error.includes('Déconnecté') || error.includes('Erreur')) {
+                    botData.status = 'error';
+                }
+            });
+
+            botProcess.on('close', (code) => {
+                console.log(`[Bot ${sessionId}] Processus terminé avec code: ${code}`);
+                botData.status = 'stopped';
+                botData.endTime = Date.now();
+                
+                // Nettoyer après 5 minutes
+                setTimeout(() => {
+                    if (bots.has(sessionId)) {
+                        bots.delete(sessionId);
+                    }
+                }, 300000);
+            });
+
+            // Attendre que le bot démarre
+            setTimeout(() => {
+                botData.status = 'running';
+                resolve({
+                    status: 'success',
+                    sessionId: sessionId,
+                    message: 'Bot démarré avec succès',
+                    pairingCode: botData.pairingCode
+                });
+            }, 3000);
+
+        } catch (error) {
+            console.error('Erreur démarrage bot:', error);
+            reject({ status: 'error', message: error.message });
         }
-      }, 5000);
-      
-      // Fermer la socket après 10 secondes
-      setTimeout(() => {
+    });
+}
+
+// Fonction pour arrêter un bot
+function stopBot(sessionId) {
+    return new Promise((resolve, reject) => {
+        if (!bots.has(sessionId)) {
+            return reject({ status: 'error', message: 'Bot non trouvé' });
+        }
+
+        const botData = bots.get(sessionId);
+        
         try {
-          if (sock && sock.ws && sock.ws.readyState === 1) {
-            sock.ws.close();
-            console.log(`🔌 Socket fermée pour ${formattedNumber}`);
-          }
-        } catch (e) {
-          // Ignorer
+            if (botData.process && !botData.process.killed) {
+                botData.process.kill('SIGTERM');
+            }
+            
+            bots.delete(sessionId);
+            resolve({ status: 'success', message: 'Bot arrêté avec succès' });
+            
+        } catch (error) {
+            reject({ status: 'error', message: error.message });
         }
-      }, 10000);
-      
-    } catch (pairError) {
-      console.error(`❌ Erreur WhatsApp:`, pairError.message);
-      
-      // Nettoyer en cas d'erreur
-      try {
-        if (fs.existsSync(sessionPath)) {
-          fs.rmSync(sessionPath, { recursive: true, force: true });
-        }
-      } catch (e) {
-        // Ignorer
-      }
-      
-      return res.status(500).json({
-        success: false,
-        error: "Erreur WhatsApp",
-        message: pairError.message || "Impossible de générer le code",
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    // ✅ RÉPONSE SUCCÈS
-    const domain = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
-    
+    });
+}
+
+// Routes API
+app.get('/api/status', (req, res) => {
+    const activeBots = Array.from(bots.values()).filter(bot => 
+        bot.status === 'running' || bot.status === 'connected'
+    ).length;
+
     res.json({
-      success: true,
-      pairingCode: pairingCode,
-      number: formattedNumber,
-      original_number: number,
-      message: "✅ Code WhatsApp généré avec succès",
-      bot_auto_start: true,
-      server_url: domain,
-      instructions: [
-        "1. Allez sur https://web.whatsapp.com",
-        "2. Cliquez sur 'Connecter avec un numéro de téléphone'",
-        `3. Entrez: ${formattedNumber}`,
-        `4. Saisissez: ${pairingCode}`,
-        "5. Cliquez sur 'Valider'",
-        "6. Le bot démarre automatiquement après connexion"
-      ],
-      expiresIn: "5 minutes",
-      timestamp: new Date().toISOString()
+        whatsapp: 'active',
+        uptime: process.uptime(),
+        memory: process.memoryUsage(),
+        activeBots: activeBots,
+        totalSessions: bots.size,
+        serverTime: new Date().toISOString()
     });
-    
-  } catch (error) {
-    console.error(`💥 Erreur serveur:`, error.message);
-    
-    res.status(500).json({
-      success: false,
-      error: "Erreur serveur",
-      message: error.message || "Une erreur est survenue",
-      timestamp: new Date().toISOString()
-    });
-  }
 });
 
-// 🚀 Démarrer un bot manuellement
-app.post("/start-bot/:number", async (req, res) => {
-  try {
-    const { number } = req.params;
-    
-    if (!activeBots.has(number)) {
-      return res.status(404).json({
-        success: false,
-        error: "Session non trouvée",
-        message: `Aucune session trouvée pour ${number}`,
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    const bot = activeBots.get(number);
-    
-    // Vérifier si déjà démarré
-    if (botProcesses.has(number)) {
-      return res.json({
-        success: true,
-        message: `Bot ${number} est déjà démarré`,
-        pid: bot.botPid,
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    // Démarrer le bot
-    const botProcess = await startBot(number, bot.sessionPath);
-    
-    if (botProcess) {
-      res.json({
-        success: true,
-        message: `Bot ${number} démarré avec succès`,
-        pid: botProcess.pid,
-        timestamp: new Date().toISOString()
-      });
-    } else {
-      res.status(500).json({
-        success: false,
-        error: "Erreur démarrage",
-        message: `Impossible de démarrer le bot ${number}`,
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-  } catch (error) {
-    console.error(`❌ Erreur démarrage bot:`, error);
-    
-    res.status(500).json({
-      success: false,
-      error: "Erreur serveur",
-      message: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// 🛑 Arrêter un bot
-app.post("/stop-bot/:number", async (req, res) => {
-  try {
-    const { number } = req.params;
-    
-    const stopped = await stopBot(number);
-    
-    if (stopped) {
-      res.json({
-        success: true,
-        message: `Bot ${number} arrêté`,
-        timestamp: new Date().toISOString()
-      });
-    } else {
-      res.status(404).json({
-        success: false,
-        error: "Bot non trouvé",
-        message: `Aucun bot actif trouvé pour ${number}`,
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-  } catch (error) {
-    console.error(`❌ Erreur arrêt bot:`, error);
-    
-    res.status(500).json({
-      success: false,
-      error: "Erreur serveur",
-      message: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// 📊 Liste des bots
-app.get("/active-bots", (req, res) => {
-  try {
-    let sessionDirs = [];
-    try {
-      sessionDirs = fs.existsSync(SESSIONS_DIR) 
-        ? fs.readdirSync(SESSIONS_DIR) 
-        : [];
-    } catch (e) {
-      console.warn("⚠️ Erreur lecture sessions:", e.message);
-    }
-    
-    const botsList = [];
-    
-    // Ajouter les bots actifs
-    activeBots.forEach((bot, number) => {
-      const isBotRunning = botProcesses.has(number);
-      
-      botsList.push({
-        number: number,
-        connected: bot.connected,
-        botStarted: isBotRunning,
-        botPid: isBotRunning ? botProcesses.get(number).pid : null,
-        hasSession: fs.existsSync(bot.sessionPath || ''),
+app.get('/api/bots', (req, res) => {
+    const botList = Array.from(bots.values()).map(bot => ({
+        sessionId: bot.sessionId,
+        status: bot.status,
+        phoneNumber: bot.phoneNumber,
+        startTime: bot.startTime,
+        uptime: bot.startTime ? Date.now() - bot.startTime : 0,
         pairingCode: bot.pairingCode,
-        timestamp: bot.timestamp
-      });
+        connected: bot.status === 'connected'
+    }));
+
+    res.json({
+        activeBots: botList.filter(b => b.status === 'connected' || b.status === 'running').length,
+        totalBots: botList.length,
+        bots: botList
     });
-    
-    // Ajouter les sessions existantes
-    sessionDirs.forEach(sessionDir => {
-      const sessionPath = path.join(SESSIONS_DIR, sessionDir);
-      try {
-        const number = sessionDir.replace(/_/g, '').replace(/[^+\d]/g, '');
-        if (number && !activeBots.has(number)) {
-          botsList.push({
-            number: number,
-            connected: false,
-            botStarted: false,
-            hasSession: true,
-            timestamp: fs.statSync(sessionPath).mtimeMs
-          });
+});
+
+app.post('/api/bots/create', async (req, res) => {
+    try {
+        const { phoneNumber } = req.body;
+        
+        if (!phoneNumber) {
+            return res.status(400).json({ 
+                status: 'error', 
+                message: 'Numéro de téléphone requis' 
+            });
         }
-      } catch (e) {
-        // Ignorer
-      }
-    });
-    
-    res.json({
-      success: true,
-      activeBots: botsList,
-      count: botsList.length,
-      totalSessions: sessionDirs.length,
-      botsRunning: botProcesses.size,
-      baileys_available: baileysAvailable,
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    console.error("❌ Erreur active-bots:", error.message);
-    
-    res.json({
-      success: true,
-      activeBots: [],
-      count: 0,
-      totalSessions: 0,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
+
+        // Nettoyer le numéro de téléphone
+        const cleanNumber = phoneNumber.replace(/\D/g, '');
+        
+        if (cleanNumber.length < 8) {
+            return res.status(400).json({ 
+                status: 'error', 
+                message: 'Numéro de téléphone invalide' 
+            });
+        }
+
+        // Générer un ID de session unique
+        const sessionId = uuidv4().replace(/-/g, '').substring(0, 12);
+        
+        // Démarrer le bot
+        const result = await startBot(sessionId, cleanNumber);
+        
+        // Attendre un peu pour récupérer le pairing code
+        setTimeout(() => {
+            const botData = bots.get(sessionId);
+            res.json({
+                status: 'success',
+                sessionId: sessionId,
+                pairingCode: botData?.pairingCode || null,
+                message: 'Bot créé avec succès. Vérifiez la console pour le pairing code.',
+                botStatus: botData?.status || 'starting'
+            });
+        }, 5000);
+
+    } catch (error) {
+        console.error('Erreur création bot:', error);
+        res.status(500).json({ 
+            status: 'error', 
+            message: error.message || 'Erreur lors de la création du bot' 
+        });
+    }
 });
 
-// 📈 Statistiques
-app.get("/stats", (req, res) => {
-  const memory = process.memoryUsage();
-  let sessionDirs = [];
-  
-  try {
-    sessionDirs = fs.existsSync(SESSIONS_DIR) 
-      ? fs.readdirSync(SESSIONS_DIR) 
-      : [];
-  } catch (e) {
-    // Ignorer
-  }
-  
-  const domain = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
-  
-  res.json({
-    success: true,
-    stats: {
-      server_status: "online",
-      baileys_status: baileysAvailable ? "loaded" : "not_loaded",
-      domain: domain,
-      uptime: Math.floor(process.uptime()),
-      active_bots: activeBots.size,
-      bots_running: botProcesses.size,
-      total_sessions: sessionDirs.length,
-      memory_usage: Math.round(memory.heapUsed / 1024 / 1024) + "MB",
-      platform: process.platform,
-      node_version: process.version,
-      timestamp: new Date().toISOString()
+app.delete('/api/bots/:sessionId', async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const result = await stopBot(sessionId);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ 
+            status: 'error', 
+            message: error.message 
+        });
     }
-  });
 });
 
-// 🗑️ Supprimer une session
-app.delete("/delete-session/:number", async (req, res) => {
-  try {
-    const { number } = req.params;
-    const sessionId = number.replace(/[^a-zA-Z0-9]/g, '_');
-    const sessionPath = path.join(SESSIONS_DIR, sessionId);
+app.get('/api/bots/:sessionId/logs', (req, res) => {
+    const { sessionId } = req.params;
+    const botData = bots.get(sessionId);
     
-    // Arrêter le bot si en cours
-    await stopBot(number);
-    
-    let deleted = false;
-    if (fs.existsSync(sessionPath)) {
-      fs.rmSync(sessionPath, { recursive: true, force: true });
-      deleted = true;
-    }
-    
-    // Supprim
-   const botSessionPath = path.join(BOT_DIR, "sessions", sessionId);
-    if (fs.existsSync(botSessionPath)) {
-      fs.rmSync(botSessionPath, { recursive: true, force: true });
-    }
-    
-    // Supprimer des bots actifs
-    if (activeBots.has(number)) {
-      activeBots.delete(number);
+    if (!botData) {
+        return res.status(404).json({ 
+            status: 'error', 
+            message: 'Bot non trouvé' 
+        });
     }
     
     res.json({
-      success: true,
-      deleted: deleted,
-      message: deleted ? `Session supprimée pour ${number}` : "Session non trouvée",
-      timestamp: new Date().toISOString()
+        status: 'success',
+        logs: botData.logs.slice(-50), // Derniers 50 logs
+        totalLogs: botData.logs.length
+    });
+});
+
+// Route principale
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Route pour les sessions
+app.get('/sessions', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'sessions.html'));
+});
+
+// Démarrer le serveur
+const server = http.createServer(app);
+
+server.listen(PORT, () => {
+    console.log(`🚀 Serveur HexTech démarré sur le port ${PORT}`);
+    console.log(`🌐 URL: http://localhost:${PORT}`);
+    console.log(`🤖 Dossier bot: ${path.join(__dirname, 'bot')}`);
+    console.log(`📁 Dossier sessions: ${path.join(__dirname, 'sessions')}`);
+});
+
+// Gestion propre de l'arrêt
+process.on('SIGTERM', () => {
+    console.log('🛑 Arrêt du serveur...');
+    
+    // Arrêter tous les bots
+    bots.forEach((bot, sessionId) => {
+        try {
+            if (bot.process && !bot.process.killed) {
+                bot.process.kill('SIGTERM');
+            }
+        } catch (error) {
+            console.error(`Erreur arrêt bot ${sessionId}:`, error);
+        }
     });
     
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
+    server.close(() => {
+        console.log('✅ Serveur arrêté proprement');
+        process.exit(0);
     });
-  }
 });
 
-// 🖥️ Panel web
-app.get("/panel", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-// 🚀 Démarrer le serveur
-async function startServer() {
-  // Charger Baileys
-  await loadBaileys();
-  
-  app.listen(PORT, () => {
-    const domain = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
-    
-    console.log(`
-╔══════════════════════════════════════════════════════╗
-║           WHATSAPP BOT SERVER - ULTIME              ║
-╠══════════════════════════════════════════════════════╣
-║ 🚀 Serveur lancé sur le port ${PORT}                     ║
-║ 🌍 Domaine: ${domain.padEnd(40)} ║
-║ 🖥️  Panel: ${domain}/panel${" ".repeat(27)}║
-║ 🤖 Dossier bot: ${BOT_DIR}                     ║
-║ 📱 WhatsApp: ${baileysAvailable ? '✅ ACTIF' : '❌ HORS LIGNE'}           ║
-║ 🔥 Auto-démarrage des bots activé                  ║
-║ 📊 Stats: ${domain}/stats${" ".repeat(30)}║
-║ 🛡️  Health: ${domain}/health${" ".repeat(28)}║
-╚══════════════════════════════════════════════════════╝
-    `);
-    
-    // Vérifier le bot
-    if (fs.existsSync(BOT_DIR)) {
-      console.log(`✅ Dossier bot trouvé: ${BOT_DIR}`);
-      
-      if (fs.existsSync(path.join(BOT_DIR, "index.js"))) {
-        console.log(`✅ Fichier bot/index.js trouvé`);
-      } else {
-        console.warn(`⚠️  Fichier bot/index.js non trouvé`);
-      }
-    } else {
-      console.warn(`⚠️  Dossier bot non trouvé: ${BOT_DIR}`);
-      console.warn(`   Créez le dossier 'bot' avec votre index.js`);
-    }
-    
-    // Keep-alive pour Render
-    if (process.env.RENDER) {
-      console.log("🔄 Auto-ping activé pour Render.com");
-      setInterval(() => {
-        fetch(`${domain}/health`).catch(() => {});
-      }, 300000); // 5 minutes
-    }
-  });
-}
-
-// 🛑 Gestion des arrêts
-process.on('SIGTERM', async () => {
-  console.log('🔴 Arrêt du serveur (SIGTERM)...');
-  
-  // Arrêter tous les bots
-  for (const [number] of botProcesses) {
-    await stopBot(number);
-  }
-  
-  setTimeout(() => {
-    process.exit(0);
-  }, 2000);
-});
-
-process.on('SIGINT', async () => {
-  console.log('🔴 Arrêt du serveur (Ctrl+C)...');
-  
-  for (const [number] of botProcesses) {
-    await stopBot(number);
-  }
-  
-  setTimeout(() => {
-    process.exit(0);
-  }, 2000);
-});
-
-process.on('uncaughtException', (error) => {
-  console.error('💥 ERREUR NON CATCHÉE:', error.message);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('⚠️ PROMISE NON GÉRÉE:', reason);
-});
-
-// 🏁 Lancer le serveur
-startServer().catch(error => {
-  console.error('💥 ERREUR DÉMARRAGE:', error.message);
-  console.error(error.stack);
-  process.exit(1);
-});
-
-// Export pour les tests
-export { app, baileysAvailable, startBot, stopBot };
+module.exports = { app, startBot, stopBot, bots };
