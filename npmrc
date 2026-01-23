@@ -1,0 +1,8 @@
+# Configuration npm pour Render
+engine-strict=false
+legacy-peer-deps=true
+save-exact=true
+package-lock=false
+fund=false
+audit=false
+progress=false
