@@ -1,4 +1,4 @@
-// server.js - VERSION DÉFINITIVE AVEC PAIRING CODE BAILEYS RÉEL
+// server.js - VERSION DÉFINITIVE SANS TS-NODE
 // Utilise directement la fonction requestPairingCode() de BaileyJS
 
 import express from 'express';
@@ -8,9 +8,6 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { spawn } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
-import { createRequire } from 'module';
-
-const require = createRequire(import.meta.url);
 
 // Configuration ES6 pour __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -57,7 +54,7 @@ async function startBot(sessionId, phoneNumber = null) {
 
             console.log(`🚀 Démarrage du bot ${sessionId} pour: ${phoneNumber || 'Génération de pairing code'}`);
 
-            // Variables d'environnement pour le bot
+            // Variables d'environnement pour le bot - SANS TS-NODE
             const env = {
                 ...process.env,
                 SESSION_ID: sessionId,
@@ -67,8 +64,8 @@ async function startBot(sessionId, phoneNumber = null) {
                 IS_RENDER: IS_RENDER ? 'true' : 'false',
                 NODE_ENV: 'production',
                 FORCE_PAIRING_MODE: 'true',
-                DISABLE_QR: 'true',
-                NODE_OPTIONS: '--loader ts-node/esm --experimental-specifier-resolution=node'
+                DISABLE_QR: 'true'
+                // IMPORTANT: NE PAS UTILISER TS-NODE sur Render
             };
 
             // Ajouter des options spécifiques à Render
@@ -106,11 +103,9 @@ async function startBot(sessionId, phoneNumber = null) {
                 });
             }
 
-            // 🎯 DÉMARRER LE BOT DIRECTEMENT
+            // 🎯 DÉMARRER LE BOT DIRECTEMENT - OPTIONS SIMPLIFIÉES
             const botProcess = spawn('node', [
-                '--experimental-modules',
-                '--es-module-specifier-resolution=node',
-                botMainPath
+                botMainPath  // JUSTE le fichier, pas d'options complexes
             ], {
                 cwd: __dirname,
                 env: env,
@@ -150,13 +145,12 @@ async function startBot(sessionId, phoneNumber = null) {
                 botData.lastUpdate = Date.now();
                 
                 // 🎯 DÉTECTION SPÉCIFIQUE DU PAIRING CODE BAILEYS (8 caractères)
-                // Format Bailey: XXXX-XXXX ou XXXXXXXX
                 let pairingCode = null;
                 
                 // Recherche spécifique pour les formats Bailey
                 const formats = [
                     // Format avec tiret: XXXX-XXXX (le vrai format Bailey)
-                    /CODE DE PAIRING.*?([A-Z0-9]{4}[-][A-Z00-9]{4})/i,
+                    /CODE DE PAIRING.*?([A-Z0-9]{4}[-][A-Z0-9]{4})/i,
                     /PAIRING.*?([A-Z0-9]{4}[-][A-Z0-9]{4})/i,
                     /pairing.*?([A-Z0-9]{4}[-][A-Z0-9]{4})/i,
                     
@@ -179,7 +173,8 @@ async function startBot(sessionId, phoneNumber = null) {
                     
                     // NOUVEAU: Détection spécifique de la sortie console
                     /🎯🎯🎯 CODE DE PAIRING GÉNÉRÉ: ([A-Z0-9]{4}[-][A-Z0-9]{4}) 🎯🎯🎯/i,
-                    /🎯🎯🎯 PAIRING_CODE_BAILEYS_GENERATED: ([A-Z0-9]{4}[-][A-Z0-9]{4}) 🎯🎯🎯/i
+                    /🎯🎯🎯 PAIRING_CODE_BAILEYS_GENERATED: ([A-Z0-9]{4}[-][A-Z0-9]{4}) 🎯🎯🎯/i,
+                    /🔑 Code: ([A-Z0-9]{4}[-][A-Z0-9]{4})/i
                 ];
                 
                 // Essayer tous les formats
@@ -241,9 +236,16 @@ async function startBot(sessionId, phoneNumber = null) {
                 // Détecter que le bot tente de générer un pairing code
                 if (output.includes('Génération pairing code') || 
                     output.includes('requestPairingCode') ||
-                    output.includes('Appel à requestPairingCode')) {
+                    output.includes('pairing code')) {
                     botData.pairingAttempted = true;
                     console.log(`🔄 Bot ${sessionId} tente de générer un pairing code...`);
+                }
+                
+                // Détecter les erreurs de numéro
+                if (output.includes('Numéro non fourni') ||
+                    output.includes('Numéro invalide')) {
+                    console.log(`❌ Bot ${sessionId}: Numéro invalide`);
+                    botData.status = 'error';
                 }
                 
                 // Limiter les logs en mémoire
@@ -266,7 +268,8 @@ async function startBot(sessionId, phoneNumber = null) {
                 // Détecter les erreurs critiques
                 if (error.includes('makeWASocket is not a function') ||
                     error.includes('ERR_MODULE_NOT_FOUND') ||
-                    error.includes('Cannot find module')) {
+                    error.includes('Cannot find module') ||
+                    error.includes('ts-node')) {
                     botData.status = 'error';
                     botData.error = error;
                     
@@ -274,7 +277,7 @@ async function startBot(sessionId, phoneNumber = null) {
                         botData.codeResolved = true;
                         reject({ 
                             status: 'error', 
-                            message: 'Erreur critique dans le bot. Vérifiez bot/index.js',
+                            message: 'Erreur critique dans le bot.',
                             details: error.substring(0, 200)
                         });
                     }
@@ -316,10 +319,10 @@ async function startBot(sessionId, phoneNumber = null) {
                 }
             });
 
-            // Timeout après 90 secondes si pas de code
+            // Timeout après 120 secondes si pas de code
             setTimeout(() => {
                 if (!botData.codeResolved && !botData.pairingCode) {
-                    console.log(`⏰ Timeout pour ${sessionId}, code non généré après 90 secondes`);
+                    console.log(`⏰ Timeout pour ${sessionId}, code non généré après 120 secondes`);
                     
                     botData.codeResolved = true;
                     resolve({
@@ -330,10 +333,10 @@ async function startBot(sessionId, phoneNumber = null) {
                         phoneNumber: phoneNumber,
                         botStatus: botData.status,
                         pairingAttempted: botData.pairingAttempted,
-                        suggestion: 'Vérifiez que votre bot/index.js appelle bien sock.requestPairingCode()'
+                        suggestion: 'Vérifiez que le numéro est correct et que le bot/index.js fonctionne'
                     });
                 }
-            }, 90000);
+            }, 120000);
 
         } catch (error) {
             console.error('Erreur démarrage bot:', error);
@@ -432,11 +435,11 @@ async function getPairingCode(sessionId) {
                 } else {
                     // Réessayer dans 2 secondes
                     setTimeout(() => {
-                        if (Date.now() - botData.startTime > 120000) {
-                            // Timeout après 120 secondes
+                        if (Date.now() - botData.startTime > 180000) {
+                            // Timeout après 3 minutes
                             resolve({ 
                                 status: 'error', 
-                                message: 'Timeout: Pairing code non généré après 2 minutes',
+                                message: 'Timeout: Pairing code non généré après 3 minutes',
                                 sessionId: sessionId,
                                 botStatus: botData.status
                             });
@@ -502,12 +505,13 @@ app.get('/api/status', (req, res) => {
         environment: IS_RENDER ? 'Render' : 'Local',
         url: req.protocol + '://' + req.get('host'),
         ownerNumber: '243816107573',
-        version: '4.0',
+        version: '5.0',
         pairingSystem: 'BAILEYS_REAL_PAIRING_CODE',
         pairingFormat: 'XXXX-XXXX (8 caractères via requestPairingCode())',
         maxSessions: 20,
         status: 'healthy',
-        botEndpoint: '/api/bots/create'
+        botEndpoint: '/api/bots/create',
+        renderUrl: RENDER_URL || 'Non défini'
     });
 });
 
@@ -725,7 +729,7 @@ app.get('/health', (req, res) => {
         pairingSystem: 'BAILEYS_REAL_PAIRING_CODE',
         pairingFormat: 'XXXX-XXXX (8 caractères via requestPairingCode())',
         whatsappStatus: 'ready',
-        apiVersion: '4.0'
+        apiVersion: '5.0'
     });
 });
 
@@ -847,7 +851,7 @@ app.get('/', (req, res) => {
                     
                     <div class="info">
                         <p>👨‍💻 Développé par <strong>HexTech</strong> | 🇨🇩 RDC | 📞 Owner: 243816107573</p>
-                        <p>🚀 Version 4.0 | Mode: ${IS_RENDER ? 'Render 🌍' : 'Local 💻'}</p>
+                        <p>🚀 Version 5.0 | Mode: ${IS_RENDER ? 'Render 🌍' : 'Local 💻'}</p>
                         <p>🔗 <strong>Système de pairing réel BaileyJS</strong></p>
                         <p>⚡ Génération via <code>sock.requestPairingCode()</code></p>
                         <p>🎯 Format: <strong>XXXX-XXXX</strong> (8 caractères)</p>
@@ -881,7 +885,7 @@ app.get('/api/docs', (req, res) => {
     
     res.json({
         name: 'HexTech WhatsApp Bot API',
-        version: '4.0',
+        version: '5.0',
         environment: IS_RENDER ? 'Render' : 'Local',
         url: publicUrl,
         owner: '243816107573',
