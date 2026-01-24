@@ -1014,6 +1014,101 @@
                 font-size: 14px;
             }
         }
+
+        /* Styles ajoutés pour le champ de numéro dans les logs */
+        .logs-phone-input-container {
+            background: rgba(30, 41, 59, 0.9);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 15px 0;
+            border: 1px solid var(--border-color);
+        }
+
+        .logs-phone-input-container h4 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-color);
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        .logs-phone-input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .logs-phone-input {
+            flex: 1;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid var(--border-color);
+            border-radius: 10px;
+            color: var(--text-color);
+            font-size: 14px;
+            font-family: 'Monaco', 'Courier New', monospace;
+        }
+
+        .logs-phone-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .logs-send-btn {
+            background: var(--gradient-primary);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .logs-send-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(99, 102, 241, 0.3);
+        }
+
+        .logs-send-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .logs-phone-hint {
+            color: var(--text-muted);
+            font-size: 12px;
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .logs-phone-status {
+            margin-top: 10px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            display: none;
+        }
+
+        .logs-phone-status.success {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success-color);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            display: block;
+        }
+
+        .logs-phone-status.error {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger-color);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -1240,6 +1335,31 @@
                 </div>
                 <h2 class="modal-title" id="logsModalTitle">Logs du Bot</h2>
                 <p class="modal-subtitle" id="logsModalSubtitle">Session: Chargement...</p>
+            </div>
+            
+            <!-- Section d'envoi de numéro depuis les logs -->
+            <div class="logs-phone-input-container">
+                <h4>
+                    <i class="fas fa-mobile-alt"></i>
+                    Envoyer un numéro directement au bot
+                </h4>
+                <div class="logs-phone-input-group">
+                    <input 
+                        type="text" 
+                        id="logsPhoneNumber" 
+                        class="logs-phone-input" 
+                        placeholder="Ex: 243816107573"
+                        autocomplete="off"
+                    >
+                    <button class="logs-send-btn" onclick="sendPhoneNumberFromLogs()" id="logsSendBtn">
+                        <i class="fas fa-paper-plane"></i> Envoyer
+                    </button>
+                </div>
+                <div class="logs-phone-hint">
+                    <i class="fas fa-info-circle"></i>
+                    Ce numéro sera envoyé directement au bot pour le pairing code
+                </div>
+                <div class="logs-phone-status" id="logsPhoneStatus"></div>
             </div>
             
             <div id="logsContent" style="
@@ -1543,6 +1663,79 @@
             }
         }
 
+        // Envoyer le numéro depuis la page de logs
+        async function sendPhoneNumberFromLogs() {
+            const phoneNumber = document.getElementById('logsPhoneNumber').value.trim();
+            const sendBtn = document.getElementById('logsSendBtn');
+            const statusDiv = document.getElementById('logsPhoneStatus');
+            
+            if (!phoneNumber) {
+                statusDiv.className = 'logs-phone-status error';
+                statusDiv.textContent = 'Veuillez entrer un numéro';
+                statusDiv.style.display = 'block';
+                return;
+            }
+            
+            if (!logsSessionId) {
+                statusDiv.className = 'logs-phone-status error';
+                statusDiv.textContent = 'Aucune session active';
+                statusDiv.style.display = 'block';
+                return;
+            }
+            
+            // Désactiver le bouton pendant l'envoi
+            sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Envoi...';
+            sendBtn.disabled = true;
+            
+            try {
+                // Envoyer le numéro directement au bot via l'API
+                const response = await fetch(`/api/bots/${logsSessionId}/send-phone`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ phoneNumber })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    statusDiv.className = 'logs-phone-status success';
+                    statusDiv.textContent = '✅ Numéro envoyé avec succès!';
+                    statusDiv.style.display = 'block';
+                    
+                    // Vider le champ
+                    document.getElementById('logsPhoneNumber').value = '';
+                    
+                    // Rafraîchir les logs pour voir le résultat
+                    setTimeout(refreshLogs, 2000);
+                    
+                    showToast('success', 'Succès', 'Numéro envoyé au bot');
+                } else {
+                    statusDiv.className = 'logs-phone-status error';
+                    statusDiv.textContent = `❌ Erreur: ${data.message || 'Erreur inconnue'}`;
+                    statusDiv.style.display = 'block';
+                    showToast('error', 'Erreur', data.message || 'Erreur lors de l\'envoi');
+                }
+                
+            } catch (error) {
+                console.error('Erreur envoi numéro:', error);
+                statusDiv.className = 'logs-phone-status error';
+                statusDiv.textContent = '❌ Erreur de connexion au serveur';
+                statusDiv.style.display = 'block';
+                showToast('error', 'Erreur', 'Impossible d\'envoyer le numéro');
+            } finally {
+                // Réactiver le bouton
+                sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Envoyer';
+                sendBtn.disabled = false;
+                
+                // Cacher le message après 5 secondes
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 5000);
+            }
+        }
+
         // Arrêter un bot
         async function stopBot(sessionId) {
             if (!confirm('Voulez-vous vraiment arrêter ce bot?')) {
@@ -1616,6 +1809,11 @@
             logsSessionId = sessionId;
             document.getElementById('logsModalTitle').textContent = 'Logs du Bot';
             document.getElementById('logsModalSubtitle').textContent = `Session: ${sessionId}`;
+            
+            // Réinitialiser le champ de numéro
+            document.getElementById('logsPhoneNumber').value = '';
+            document.getElementById('logsPhoneStatus').style.display = 'none';
+            
             document.getElementById('logsModal').style.display = 'flex';
             
             await refreshLogs();
@@ -1717,10 +1915,17 @@
             // Événement sur le bouton de rafraîchissement
             document.getElementById('refreshBtn').addEventListener('click', refreshData);
             
-            // Événement sur la touche Entrée dans le champ de numéro
+            // Événement sur la touche Entrée dans le champ de numéro principal
             document.getElementById('phoneNumber').addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
                     createBot();
+                }
+            });
+            
+            // Événement sur la touche Entrée dans le champ de numéro des logs
+            document.getElementById('logsPhoneNumber').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    sendPhoneNumberFromLogs();
                 }
             });
             
@@ -1758,6 +1963,7 @@
         window.refreshLogs = refreshLogs;
         window.stopBot = stopBot;
         window.copyToClipboard = copyToClipboard;
+        window.sendPhoneNumberFromLogs = sendPhoneNumberFromLogs;
     </script>
 </body>
 </html>
