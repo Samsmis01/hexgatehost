@@ -1,7 +1,7 @@
 // bot/index.js
 
 // ============================================
-// 📦 IMPORTS ES6 OBLIGATOIRES EN PREMIER
+// 📦 IMPORTS ES6 CORRIGÉS
 // ============================================
 import fs from 'fs';
 import path from 'path';
@@ -105,7 +105,7 @@ const colors = {
 };
 
 // ============================================
-// 📁 DOSSIERS (IMPORTANT : AVEC fs.existsSync)
+// 📁 DOSSIERS
 // ============================================
 const VV_FOLDER = path.join(__dirname, '.VV');
 const DELETED_MESSAGES_FOLDER = path.join(__dirname, 'deleted_messages');
@@ -114,14 +114,16 @@ const VIEW_ONCE_FOLDER = path.join(__dirname, 'viewOnce');
 const DELETED_IMAGES_FOLDER = path.join(__dirname, 'deleted_images');
 
 // Vérification des dossiers
-[VV_FOLDER, DELETED_MESSAGES_FOLDER, COMMANDS_FOLDER, VIEW_ONCE_FOLDER, DELETED_IMAGES_FOLDER].forEach(folder => {
-    if (!fs.existsSync(folder)) {
-        fs.mkdirSync(folder, { recursive: true });
-        console.log(`${colors.green}✅ Dossier ${path.basename(folder)} créé${colors.reset}`);
-    } else {
-        console.log(`${colors.cyan}📁 Dossier ${path.basename(folder)} déjà existant${colors.reset}`);
-    }
-});
+(() => {
+    [VV_FOLDER, DELETED_MESSAGES_FOLDER, COMMANDS_FOLDER, VIEW_ONCE_FOLDER, DELETED_IMAGES_FOLDER].forEach(folder => {
+        if (!fs.existsSync(folder)) {
+            fs.mkdirSync(folder, { recursive: true });
+            console.log(`${colors.green}✅ Dossier ${path.basename(folder)} créé${colors.reset}`);
+        } else {
+            console.log(`${colors.cyan}📁 Dossier ${path.basename(folder)} déjà existant${colors.reset}`);
+        }
+    });
+})();
 
 // ============================================
 // 🎯 FONCTION POUR LE WEB
@@ -139,38 +141,44 @@ export async function startBotForWeb(phone, pairingCode = null) {
 // ============================================
 let makeWASocket, useMultiFileAuthState, downloadContentFromMessage, DisconnectReason, fetchLatestBaileysVersion, Browsers, delay, getContentType;
 
-try {
-    const baileysImport = await import('@whiskeysockets/baileys');
-    makeWASocket = baileysImport.default;
-    useMultiFileAuthState = baileysImport.useMultiFileAuthState;
-    downloadContentFromMessage = baileysImport.downloadContentFromMessage;
-    DisconnectReason = baileysImport.DisconnectReason;
-    fetchLatestBaileysVersion = baileysImport.fetchLatestBaileysVersion;
-    Browsers = baileysImport.Browsers;
-    delay = baileysImport.delay;
-    getContentType = baileysImport.getContentType;
-    
-    console.log(`${colors.green}✅ BaileyJS importé avec succès${colors.reset}`);
-} catch (error) {
-    console.log(`${colors.red}❌ Erreur import BaileyJS: ${error.message}${colors.reset}`);
-    console.log('📥 Installation automatique en cours...');
-    
+(async () => {
     try {
-        const { execSync } = require('child_process');
-        console.log('🚀 Installation de @whiskeysockets/baileys...');
-        execSync('npm install @whiskeysockets/baileys@^6.5.0', { stdio: 'inherit' });
+        const baileysImport = await import('@whiskeysockets/baileys');
+        makeWASocket = baileysImport.default;
+        useMultiFileAuthState = baileysImport.useMultiFileAuthState;
+        downloadContentFromMessage = baileysImport.downloadContentFromMessage;
+        DisconnectReason = baileysImport.DisconnectReason;
+        fetchLatestBaileysVersion = baileysImport.fetchLatestBaileysVersion;
+        Browsers = baileysImport.Browsers;
+        delay = baileysImport.delay;
+        getContentType = baileysImport.getContentType;
         
-        // Redémarrer après installation
-        console.log('🔄 Redémarrage dans 3 secondes...');
-        setTimeout(() => {
-            process.exit(0);
-        }, 3000);
-        return;
-    } catch (installError) {
-        console.log(`${colors.red}❌ Échec installation: ${installError.message}${colors.reset}`);
-        process.exit(1);
+        console.log(`${colors.green}✅ BaileyJS importé avec succès${colors.reset}`);
+        
+        // Démarrer le bot après l'import
+        startBot().catch(error => {
+            console.log(`${colors.red}❌ Erreur démarrage bot: ${error.message}${colors.reset}`);
+            process.exit(1);
+        });
+    } catch (error) {
+        console.log(`${colors.red}❌ Erreur import BaileyJS: ${error.message}${colors.reset}`);
+        console.log('📥 Installation automatique en cours...');
+        
+        try {
+            const { execSync } = require('child_process');
+            console.log('🚀 Installation de @whiskeysockets/baileys...');
+            execSync('npm install @whiskeysockets/baileys@^6.5.0', { stdio: 'inherit' });
+            
+            console.log('🔄 Redémarrage dans 3 secondes...');
+            setTimeout(() => {
+                process.exit(0);
+            }, 3000);
+        } catch (installError) {
+            console.log(`${colors.red}❌ Échec installation: ${installError.message}${colors.reset}`);
+            process.exit(1);
+        }
     }
-}
+})();
 
 // ============================================
 // 🛡️ FONCTIONS UTILITAIRES
@@ -209,7 +217,6 @@ async function sendFormattedMessage(sock, jid, messageText, context = null) {
 ┗━━━━━━━━━━━━━━━┛`;
 
     try {
-        // Essayer avec l'image
         if (botImageUrl && botImageUrl.startsWith('http')) {
             const sentMsg = await sock.sendMessage(jid, {
                 image: { url: botImageUrl },
@@ -226,7 +233,6 @@ async function sendFormattedMessage(sock, jid, messageText, context = null) {
         console.log(`${colors.yellow}⚠️ Erreur avec l'image, envoi texte seulement${colors.reset}`);
     }
 
-    // En dernier recours, envoyer en texte
     const sentMsg = await sock.sendMessage(jid, { 
         text: formattedMessage 
     });
@@ -293,7 +299,7 @@ class CommandHandler {
             description: "Test de réponse du bot",
             execute: async (sock, msg, args, context) => {
                 const from = msg.key.remoteJid;
-                await sendFormattedMessage(sock, from, `🏓 *PONG!*\n\n🤖 HEXGATE V1 - En ligne!\n👤 Envoyé par: ${msg.pushName || 'Inconnu'}`);
+                await sendFormattedMessage(sock, from, `🏓 *PONG!*\n\n🤖 HEXGATE V1 - En ligne!\n👤 Envoyé par: ${msg.pushName || 'Inconnu'}`, { pushName: msg.pushName });
             }
         });
 
@@ -343,7 +349,7 @@ class CommandHandler {
             description: "Affiche l'aide",
             execute: async (sock, msg, args, context) => {
                 const from = msg.key.remoteJid;
-                await sendFormattedMessage(sock, from, `🛠️ *AIDE HEXGATE*\n\nPrefix: ${prefix}\n\nCommandes:\n• ${prefix}ping - Test\n• ${prefix}menu - Menu complet\n• ${prefix}help - Aide\n• ${prefix}info - Info groupe\n• ${prefix}link - Lien groupe\n\n👑 Propriétaire: ${config.ownerNumber}`);
+                await sendFormattedMessage(sock, from, `🛠️ *AIDE HEXGATE*\n\nPrefix: ${prefix}\n\nCommandes:\n• ${prefix}ping - Test\n• ${prefix}menu - Menu complet\n• ${prefix}help - Aide\n• ${prefix}info - Info groupe\n• ${prefix}link - Lien groupe\n\n👑 Propriétaire: ${config.ownerNumber}`, { pushName: msg.pushName });
             }
         });
 
@@ -425,7 +431,7 @@ class CommandHandler {
             }
         });
 
-        // Commande SAVE (restauration message)
+        // Commande SAVE
         this.commands.set("save", {
             name: "save",
             description: "Sauvegarde un message",
@@ -453,7 +459,6 @@ class CommandHandler {
                         caption: `👁️ *Vue unique restaurée*\n👤 Par: ${data.sender}`
                     });
                     
-                    // Supprimer après affichage
                     viewOnceStore.delete(from);
                     fs.unlinkSync(data.imagePath);
                 } catch (error) {
@@ -480,7 +485,6 @@ class CommandHandler {
         const command = this.commands.get(cmd);
         
         try {
-            // Réaction emoji aléatoire
             if (autoReact) {
                 const randomEmoji = randomEmojis[Math.floor(Math.random() * randomEmojis.length)];
                 await sock.sendMessage(msg.key.remoteJid, {
@@ -543,7 +547,7 @@ ${colors.magenta}╔════════════════════
 ║${colors.green} ✅ MODE WEB ACTIVÉ - PAIRING CODE SYSTÈME      ${colors.magenta}║
 ║${colors.green} ✅ RESTAURATION MESSAGES & IMAGES              ${colors.magenta}║
 ║${colors.green} ✅ ANTI-LINK PROTECTION                        ${colors.magenta}║
-║${colors.green} ✅ ${this.commands ? this.commands.size : '?'} COMMANDES CHARGÉES           ${colors.magenta}║
+║${colors.green} ✅ COMMANDES COMPLÈTES                         ${colors.magenta}║
 ╚══════════════════════════════════════════════════╝${colors.reset}
 `);
 
@@ -618,7 +622,6 @@ ${colors.magenta}╔════════════════════
             } else if (connection === "open") {
                 console.log(`${colors.green}✅ Connecté à WhatsApp!${colors.reset}`);
                 
-                // Message de confirmation
                 try {
                     await sock.sendMessage(OWNER_NUMBER, {
                         text: `✅ *HEX-GATE CONNECTEE*\n\n🚀 HEXGATE V1 en ligne!\n📊 Commandes: ${commandHandler.commands.size}\n🔧 Mode: ${botPublic ? 'PUBLIC' : 'PRIVÉ'}`
@@ -670,7 +673,6 @@ ${colors.magenta}╔════════════════════
                             const containsLink = linkRegex.test(originalText);
                             
                             if (containsLink && !isOwnerMsg && !isAdminMsg) {
-                                // Ne pas restaurer les liens des non-admins
                                 console.log(`${colors.yellow}⚠️ Message avec lien, non restauré${colors.reset}`);
                                 continue;
                             }
@@ -686,7 +688,6 @@ ${colors.magenta}╔════════════════════
 
                             console.log(`${colors.green}✅ Message restauré de @${mention}${colors.reset}`);
                             
-                            // Nettoyer
                             messageStore.delete(deletedId);
                             const filePath = path.join(DELETED_MESSAGES_FOLDER, `${deletedId}.json`);
                             if (fs.existsSync(filePath)) {
@@ -701,23 +702,25 @@ ${colors.magenta}╔════════════════════
                     if (vo) {
                         const inner = vo.message;
                         if (inner?.imageMessage) {
-                            const msgId = msg.key.id;
-                            const stream = await downloadContentFromMessage(inner.imageMessage, "image");
-                            let buffer = Buffer.from([]);
-                            for await (const chunk of stream) {
-                                buffer = Buffer.concat([buffer, chunk]);
-                            }
+                            try {
+                                const msgId = msg.key.id;
+                                const stream = await downloadContentFromMessage(inner.imageMessage, "image");
+                                let buffer = Buffer.from([]);
+                                for await (const chunk of stream) {
+                                    buffer = Buffer.concat([buffer, chunk]);
+                                }
 
-                            const imgPath = path.join(VIEW_ONCE_FOLDER, `${msgId}.jpg`);
-                            fs.writeFileSync(imgPath, buffer);
+                                const imgPath = path.join(VIEW_ONCE_FOLDER, `${msgId}.jpg`);
+                                fs.writeFileSync(imgPath, buffer);
 
-                            viewOnceStore.set(from, {
-                                imagePath: imgPath,
-                                sender: msg.pushName || "Inconnu",
-                                time: Date.now()
-                            });
+                                viewOnceStore.set(from, {
+                                    imagePath: imgPath,
+                                    sender: msg.pushName || "Inconnu",
+                                    time: Date.now()
+                                });
 
-                            console.log(`${colors.cyan}👁️ Vue unique sauvegardée${colors.reset}`);
+                                console.log(`${colors.cyan}👁️ Vue unique sauvegardée${colors.reset}`);
+                            } catch (error) {}
                         }
                     }
 
@@ -734,7 +737,6 @@ ${colors.magenta}╔════════════════════
                         const containsLink = linkRegex.test(body);
                         
                         if (containsLink && !isOwnerMsg && !isAdminMsg) {
-                            // Supprimer les messages avec liens des non-admins
                             console.log(`${colors.red}🚫 LIEN BLOQUÉ de ${sender} (non-admin)${colors.reset}`);
                             
                             const now = Date.now();
@@ -750,7 +752,7 @@ ${colors.magenta}╔════════════════════
                             try {
                                 await sock.sendMessage(from, { delete: msg.key });
                             } catch (deleteError) {}
-                            continue; // Ne pas sauvegarder
+                            continue;
                         }
 
                         // SAUVEGARDE NORMALE
@@ -825,7 +827,7 @@ ${colors.magenta}╔════════════════════
             }
         });
 
-        // 👥 BIENVENUE AUTO (si activé)
+        // 👥 BIENVENUE AUTO
         sock.ev.on("group-participants.update", async (update) => {
             if (welcomeEnabled && update.action === "add") {
                 try {
@@ -891,17 +893,6 @@ ${colors.magenta}╔════════════════════
         process.exit(1);
     }
 }
-
-// ============================================
-// 🚀 DÉMARRAGE
-// ============================================
-console.log(`${colors.magenta}🚀 Démarrage HEXGATE V3...${colors.reset}`);
-
-// Démarrer le bot
-startBot().catch(error => {
-    console.log(`${colors.red}❌ Erreur fatale: ${error.message}${colors.reset}`);
-    process.exit(1);
-});
 
 // ============================================
 // 📦 EXPORT POUR SERVEUR WEB
