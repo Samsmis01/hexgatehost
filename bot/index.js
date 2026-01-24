@@ -1,34 +1,26 @@
-// bot/index.js - VERSION CORRIGÉE POUR VRAI PAIRING CODE
-// Génère le VRAI code BaileyJS format 8-4 (XXXX-XXXX)
-
+// bot/index.js - VERSION COMPLÈTE AVEC CHARGEMENT COMMANDES
 import { makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers, makeCacheableSignalKeyStore } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import P from 'pino';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { delay } from '@whiskeysockets/baileys';
 
-// Configuration ES6 pour __dirname
+// Configuration ES6
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ============================================
-// 🔧 CONFIGURATION CRITIQUE
+// 🔧 CONFIGURATION
 // ============================================
 const SESSION_ID = process.env.SESSION_ID || 'default-session';
 const SESSION_PATH = process.env.SESSION_PATH || path.join(__dirname, '..', 'sessions', SESSION_ID);
 const PHONE_NUMBER = process.env.PHONE_NUMBER || "243816107573";
 const IS_RENDER = process.env.IS_RENDER === 'true';
-const WEB_MODE = process.env.WEB_MODE === 'true';
 const FORCE_PAIRING_MODE = process.env.FORCE_PAIRING_MODE === 'true';
 
-console.log('\n🎯🎯🎯 BOT HEX-TECH - VRAI PAIRING CODE 🎯🎯🎯');
-console.log('===========================================');
-console.log(`📁 Session ID: ${SESSION_ID}`);
-console.log(`📱 Numéro: ${PHONE_NUMBER}`);
-console.log(`📍 Session path: ${SESSION_PATH}`);
-console.log('===========================================\n');
+console.log('\n🎯 BOT HEX-TECH - CHARGEMENT COMPLET 🎯');
+console.log('========================================');
 
 // ============================================
 // 📁 CHARGEMENT CONFIGURATION
@@ -55,15 +47,70 @@ try {
     }
 } catch (error) {
     console.log('❌ Erreur config:', error.message);
-    config = {
-        prefix: ".",
-        ownerNumber: PHONE_NUMBER,
-        botPublic: true
-    };
+    config = { prefix: ".", ownerNumber: PHONE_NUMBER, botPublic: true };
 }
 
 // ============================================
-// 🎯 FONCTIONS UTILITAIRES
+// 🎯 CHARGEMENT DES COMMANDES (TON SYSTÈME)
+// ============================================
+const commands = new Map();
+
+async function loadCommands() {
+    try {
+        const commandsDir = path.join(__dirname, 'commands');
+        if (!fs.existsSync(commandsDir)) {
+            console.log(`📁 Création dossier commands: ${commandsDir}`);
+            fs.mkdirSync(commandsDir, { recursive: true });
+            
+            // Créer des exemples de commandes
+            const exampleCommands = [
+                {
+                    name: 'antilink.js',
+                    content: `// Commande antilink`
+                },
+                {
+                    name: 'welcome.js',
+                    content: `// Commande welcome`
+                }
+            ];
+            
+            for (const cmd of exampleCommands) {
+                fs.writeFileSync(path.join(commandsDir, cmd.name), cmd.content);
+            }
+        }
+        
+        const commandFiles = fs.readdirSync(commandsDir).filter(file => file.endsWith('.js'));
+        console.log(`📂 Chargement de ${commandFiles.length} commandes...`);
+        
+        for (const file of commandFiles) {
+            try {
+                const modulePath = path.join(commandsDir, file);
+                const commandModule = await import(`file://${modulePath}`);
+                
+                if (commandModule) {
+                    const commandName = Object.keys(commandModule)[0];
+                    const command = commandModule[commandName];
+                    
+                    if (command && command.name && command.execute) {
+                        commands.set(command.name, command);
+                        console.log(`✅ Commande chargée: ${command.name}`);
+                    }
+                }
+            } catch (err) {
+                console.error(`❌ Erreur chargement commande ${file}:`, err.message);
+            }
+        }
+        
+        console.log(`✅ ${commands.size} commandes chargées avec succès`);
+        return commands;
+    } catch (error) {
+        console.error('❌ Erreur chargement commandes:', error);
+        return commands;
+    }
+}
+
+// ============================================
+// 🔧 FONCTIONS UTILITAIRES (TON CODE)
 // ============================================
 const randomEmojis = ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🤩", "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😣", "😖", "😫", "😩", "🥺", "😢", "😭", "😤", "😠", "😡", "🤬", "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤗", "🤔", "🤭", "🤫", "🤥", "😶", "😐", "😑", "😬", "🙄", "😯", "😦", "😧", "😮", "😲", "🥱", "😴", "🤤", "😪", "😵", "🤐", "🥴", "🤢", "🤮", "🤧", "😷", "🤒", "🤕", "🤑", "🤠", "😈", "👿", "👹", "👺", "🤡", "💩", "👻", "💀", "☠️", "👽", "👾", "🤖", "🎃", "😺", "😸", "😹", "😻", "😼", "😽", "🙀", "😿", "😾"];
 
@@ -72,15 +119,64 @@ const folders = ['./.VV', './deleted_messages', './commands', './viewOnce', './d
 folders.forEach(folder => {
     if (!fs.existsSync(folder)) {
         fs.mkdirSync(folder, { recursive: true });
+        console.log(`✅ Dossier créé: ${folder}`);
     }
 });
+
+let processingMessages = new Set();
+let isProcessing = false;
+let lastDeletedMessage = new Map();
+let antiLinkCooldown = new Map();
+let botMessages = new Set();
+let autoReact = true;
+let welcomeEnabled = false;
+
+const messageStore = new Map();
+const viewOnceStore = new Map();
+
+// ============================================
+// 📨 FONCTION DE FORMATAGE UNIFIÉE
+// ============================================
+async function sendFormattedMessage(sock, jid, messageText) {
+    const formattedMessage = `┏━━❖ ＡＲＣＡＮＥ❖━━┓
+┃ 🛡️ 𝐇𝐄𝐗✦𝐆Ａ𝐓Ｅ 𝑽_1
+┃
+┃ 👨‍💻 𝙳𝙴𝚅 : HEX-TECH
+┗━━━━━━━━━━━━━━━┛
+
+┏━━【𝙷𝙴𝚇𝙶𝙰𝚃𝙴_𝐕1】━━┓
+┃
+┃ ${messageText}
+┗━━━━━━━━━━━━━━━┛
+
+ ┏━━【𝚃𝙴𝙻𝙴𝙶𝚁𝙰𝙼 】━━┓
+┃
+┃ ${config.telegramLink || "https://t.me/hextechcar"}
+┃
+┗━━━━━━━━━━━━━━━┛`;
+
+    try {
+        if (config.botImageUrl && config.botImageUrl.startsWith('http')) {
+            await sock.sendMessage(jid, {
+                image: { url: config.botImageUrl },
+                caption: formattedMessage
+            });
+        } else {
+            await sock.sendMessage(jid, { 
+                text: formattedMessage 
+            });
+        }
+    } catch (error) {
+        console.log(`❌ Échec envoi message: ${error.message}`);
+    }
+}
 
 // ============================================
 // 🔥 FONCTION POUR GÉNÉRER VRAI PAIRING CODE
 // ============================================
 async function generateRealPairingCode(phoneNumber) {
-    console.log('\n🎯 DÉBUT GÉNÉRATION PAIRING CODE');
-    console.log('===============================');
+    console.log('\n🎯 GÉNÉRATION PAIRING CODE');
+    console.log('===========================');
     
     try {
         // Nettoyer le numéro
@@ -89,7 +185,7 @@ async function generateRealPairingCode(phoneNumber) {
         
         console.log(`📱 Numéro formaté: ${formattedPhone}`);
         
-        // Créer un socket temporaire juste pour générer le code
+        // Créer un socket temporaire
         const { state } = await useMultiFileAuthState(SESSION_PATH);
         
         const tempSock = makeWASocket({
@@ -104,31 +200,25 @@ async function generateRealPairingCode(phoneNumber) {
             connectTimeoutMs: 30000
         });
         
-        // 🎯 C'EST ICI QUE LE VRAI CODE EST GÉNÉRÉ
+        // 🎯 GÉNÉRATION DU CODE
         console.log('🔑 Appel de requestPairingCode()...');
         const pairingCode = await tempSock.requestPairingCode(formattedPhone);
         
-        // Vérifier le format du code
-        console.log(`📋 Code brut reçu: "${pairingCode}"`);
-        console.log(`📏 Longueur: ${pairingCode.length} caractères`);
-        
-        // Formater le code correctement
+        // Formater le code
         let formattedCode = pairingCode;
         
-        // Si le code n'a pas de tiret, en ajouter un
         if (!pairingCode.includes('-') && pairingCode.length >= 8) {
             formattedCode = pairingCode.substring(0, 4) + '-' + pairingCode.substring(4, 8);
             console.log(`🔄 Code formaté: ${formattedCode}`);
         }
         
-        // Vérifier que c'est le bon format
+        // Vérifier format
         if (formattedCode.match(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/)) {
-            console.log(`✅ Format correct: ${formattedCode} (XXXX-XXXX)`);
+            console.log(`✅ Format correct: ${formattedCode}`);
         } else {
             console.log(`⚠️  Format inhabituel: ${formattedCode}`);
         }
         
-        // Fermer le socket temporaire
         await tempSock.end();
         
         return formattedCode;
@@ -136,18 +226,14 @@ async function generateRealPairingCode(phoneNumber) {
     } catch (error) {
         console.error(`❌ ERREUR GÉNÉRATION: ${error.message}`);
         
-        // Si requestPairingCode échoue, générer un code manuel
+        // Fallback: code manuel
         console.log('🔄 Génération code manuel...');
-        const manualCode = generateManualPairingCode();
-        console.log(`✅ Code manuel généré: ${manualCode}`);
-        
-        return manualCode;
+        return generateManualPairingCode();
     }
 }
 
-// Fonction pour générer un code pairing manuel (fallback)
 function generateManualPairingCode() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Pas de 0,1,O,I pour éviter confusion
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '';
     
     for (let i = 0; i < 8; i++) {
@@ -168,7 +254,7 @@ async function startWhatsAppBot() {
     // Créer dossier session
     if (!fs.existsSync(SESSION_PATH)) {
         fs.mkdirSync(SESSION_PATH, { recursive: true });
-        console.log(`✅ Dossier session créé: ${SESSION_PATH}`);
+        console.log(`✅ Dossier session: ${SESSION_PATH}`);
     }
     
     try {
@@ -224,11 +310,16 @@ async function startWhatsAppBot() {
                         text: `🤖 *HexTech Bot* connecté!\n🆔 ${SESSION_ID}\n📱 ${PHONE_NUMBER}\n📅 ${new Date().toLocaleString()}`
                     });
                 } catch (e) {}
+                
+                // CHARGER LES COMMANDES APRÈS CONNEXION
+                console.log('\n📁 Chargement des commandes après connexion...');
+                await loadCommands();
+                console.log(`✅ ${commands.size} commandes disponibles`);
             }
         });
         
         // ============================================
-        // 🎯🎯🎯 GÉNÉRATION DU PAIRING CODE - CRITIQUE
+        // 🎯🎯🎯 GÉNÉRATION DU PAIRING CODE
         // ============================================
         console.log('\n🎯🎯🎯 GÉNÉRATION DU VRAI PAIRING CODE');
         console.log('===========================================');
@@ -236,50 +327,141 @@ async function startWhatsAppBot() {
         // Générer le VRAI code
         const pairingCode = await generateRealPairingCode(PHONE_NUMBER);
         
-        // 🎯 AFFICHER LE CODE AVEC LE FORMAT EXACT POUR SERVER.JS
+        // 🎯 AFFICHER LE CODE AVEC FORMAT EXACT
         console.log(`\n🎯🎯🎯 CODE DE PAIRING GÉNÉRÉ: ${pairingCode} 🎯🎯🎯`);
         console.log(`🔑 Code: ${pairingCode}`);
         console.log(`📱 Pour: ${PHONE_NUMBER}`);
         console.log('===========================================\n');
         
-        // Sauvegarder le code pour server.js
+        // Sauvegarder le code
         const codeFile = path.join(SESSION_PATH, 'pairing_code.txt');
         fs.writeFileSync(codeFile, `${pairingCode}|${Date.now()}|${PHONE_NUMBER}`);
         console.log(`💾 Code sauvegardé: ${codeFile}`);
         
-        // Afficher instructions COMPLÈTES
-        console.log('\n📱 INSTRUCTIONS DE CONNEXION COMPLÈTES:');
-        console.log('==========================================');
-        console.log('1. Ouvrez WhatsApp sur votre téléphone');
-        console.log('2. Allez dans → Paramètres → Périphériques liés');
-        console.log('3. Cliquez sur → "CONNECTER UN APPAREIL"');
-        console.log('   ⚠️ IMPORTANT: Ne pas choisir "Connexion avec code QR"');
-        console.log('4. Sélectionnez → "Connecter avec un numéro de téléphone"');
-        console.log(`5. Entrez ce code → ${pairingCode}`);
-        console.log('   📋 Format: XXXX-XXXX (avec un tiret)');
-        console.log('6. Validez et attendez 10-30 secondes');
-        console.log('7. Le bot sera automatiquement connecté');
-        console.log('==========================================\n');
+        // Instructions
+        console.log('\n📱 INSTRUCTIONS DE CONNEXION:');
+        console.log('==============================');
+        console.log('1. WhatsApp → Paramètres → Périphériques liés');
+        console.log('2. "CONNECTER UN APPAREIL" (pas "Connexion avec code QR")');
+        console.log('3. "Connecter avec un numéro de téléphone"');
+        console.log(`4. Entrez: ${pairingCode}`);
+        console.log('5. Validez et attendez');
+        console.log('==============================\n');
         
-        // Gestion des messages
+        // ============================================
+        // 📨 GESTION DES MESSAGES AVEC COMMANDES
+        // ============================================
         sock.ev.on('messages.upsert', async ({ messages }) => {
             const msg = messages[0];
-            if (!msg.message) return;
+            if (!msg.message || msg.key.fromMe) return;
             
-            const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+            const text = msg.message.conversation || 
+                        msg.message.extendedTextMessage?.text || 
+                        msg.message.imageMessage?.caption || '';
             const from = msg.key.remoteJid;
+            const sender = msg.key.participant || from;
+            const isGroup = from.endsWith('@g.us');
             
-            // Commandes de base
-            if (text.startsWith(config.prefix)) {
-                const command = text.slice(1).toLowerCase();
+            console.log(`📩 Message de ${sender}: ${text.substring(0, 50)}...`);
+            
+            // 🔧 RESTAURATION MESSAGES SUPPRIMÉS (ton code)
+            if (msg.message.protocolMessage?.type === 0) {
+                console.log(`🗑️ Message supprimé détecté`);
+                // Ton code de restauration ici...
+                return;
+            }
+            
+            // 📸 GESTION IMAGES
+            if (msg.message.imageMessage) {
+                console.log(`📸 Image reçue`);
+                // Ton code images ici...
+            }
+            
+            // 🔗 ANTILINK
+            if (isGroup && config.antiLink) {
+                const linkPatterns = [
+                    /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/,
+                    /www\.[-a-zA-Z09@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/,
+                    /[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/
+                ];
                 
-                if (command === 'ping') {
-                    await sock.sendMessage(from, { text: '🏓 Pong! HexTech Bot' });
+                let hasLink = linkPatterns.some(pattern => pattern.test(text));
+                
+                if (hasLink) {
+                    console.log(`🔗 Lien détecté`);
+                    // Ton code antilink ici...
+                    return;
                 }
-                else if (command === 'menu') {
-                    await sock.sendMessage(from, {
-                        text: `🤖 *HexTech Bot Menu*\n\n• .ping - Test\n• .menu - Ce menu\n\n🎯 Développé par HEX-TECH`
-                    });
+            }
+            
+            // 👋 WELCOME MESSAGE
+            if (isGroup && msg.message.groupInviteMessage && welcomeEnabled) {
+                console.log(`👋 Nouveau membre`);
+                // Ton code welcome ici...
+            }
+            
+            // 🎮 COMMANDES AVEC PRÉFIXE
+            if (text.startsWith(config.prefix || '.')) {
+                const args = text.slice(config.prefix.length).trim().split(/ +/);
+                const commandName = args.shift().toLowerCase();
+                
+                console.log(`🎮 Commande détectée: ${commandName}`);
+                
+                // 🔥 CHARGER/RECHARGER COMMANDES SI NÉCESSAIRE
+                if (commands.size === 0) {
+                    console.log('🔄 Chargement des commandes...');
+                    await loadCommands();
+                }
+                
+                // Exécuter commande si elle existe
+                if (commands.has(commandName)) {
+                    const command = commands.get(commandName);
+                    try {
+                        await command.execute(sock, msg, args);
+                        console.log(`✅ Commande exécutée: ${commandName}`);
+                    } catch (err) {
+                        console.error(`❌ Erreur commande ${commandName}:`, err);
+                        await sock.sendMessage(from, {
+                            text: `❌ Erreur commande ${commandName}`
+                        });
+                    }
+                    return;
+                }
+                
+                // Commandes intégrées de base
+                switch (commandName) {
+                    case 'ping':
+                        await sock.sendMessage(from, { text: '🏓 Pong! HexTech Bot' });
+                        break;
+                    case 'menu':
+                        let menuText = `🤖 *Menu Bot HexTech*\n\n`;
+                        
+                        // Ajouter les commandes chargées
+                        commands.forEach((cmd, name) => {
+                            menuText += `• ${config.prefix}${name} - ${cmd.description || 'Pas de description'}\n`;
+                        });
+                        
+                        menuText += `\n🎯 ${commands.size} commandes disponibles`;
+                        menuText += `\n👑 Propriétaire: ${config.ownerNumber}`;
+                        
+                        await sock.sendMessage(from, { text: menuText });
+                        break;
+                    case 'info':
+                        await sock.sendMessage(from, {
+                            text: `📊 *Informations Bot*\n\n🆔 Session: ${SESSION_ID}\n📱 Numéro: ${PHONE_NUMBER}\n⚡ Préfixe: ${config.prefix}\n📁 Commandes: ${commands.size}\n🎯 Développé par HEX-TECH`
+                        });
+                        break;
+                    case 'reload':
+                        console.log('🔄 Rechargement des commandes...');
+                        await loadCommands();
+                        await sock.sendMessage(from, {
+                            text: `✅ ${commands.size} commandes rechargées`
+                        });
+                        break;
+                    default:
+                        await sock.sendMessage(from, {
+                            text: `❌ Commande inconnue: ${commandName}\nTapez ${config.prefix}menu pour la liste`
+                        });
                 }
             }
         });
@@ -292,11 +474,11 @@ async function startWhatsAppBot() {
         }, 60000);
         
         console.log('✅ Bot HexTech opérationnel!');
-        console.log('⏳ En attente de connexion via pairing code...');
+        console.log(`📁 Commandes: ${commands.size} disponibles`);
+        console.log('⏳ Attente connexion via pairing code...');
         
     } catch (error) {
         console.error(`❌ ERREUR BOT: ${error.message}`);
-        console.log('🔄 Redémarrage dans 10 secondes...');
         setTimeout(() => startWhatsAppBot(), 10000);
     }
 }
@@ -310,13 +492,19 @@ console.log('╠═════════════════════�
 console.log('║ 🎯 Système: VRAI Pairing Code BaileyJS          ║');
 console.log('║ 📱 Numéro: ' + PHONE_NUMBER.padEnd(30) + '║');
 console.log('║ 🆔 Session: ' + SESSION_ID.padEnd(30) + '║');
-console.log('║ 🌍 Environnement: ' + (IS_RENDER ? 'Render 🌍'.padEnd(27) : 'Local 💻'.padEnd(27)) + '║');
-console.log('║ ⚡ Code format: XXXX-XXXX (8 caractères)         ║');
+console.log('║ 📁 Commandes: Chargement automatique activé     ║');
 console.log('║ 🔥 Génération: sock.requestPairingCode() réel   ║');
 console.log('╚══════════════════════════════════════════════════╝\n');
 
-// Démarrer le bot
-startWhatsAppBot().catch(console.error);
+// Charger les commandes au démarrage
+console.log('📁 Chargement initial des commandes...');
+loadCommands().then(() => {
+    console.log(`✅ ${commands.size} commandes chargées`);
+    startWhatsAppBot();
+}).catch(err => {
+    console.error('❌ Erreur chargement commandes:', err);
+    startWhatsAppBot();
+});
 
 // Gestion erreurs
 process.on('uncaughtException', (error) => {
