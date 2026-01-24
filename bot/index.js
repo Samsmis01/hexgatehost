@@ -725,8 +725,8 @@ ${colors.magenta}╔════════════════════
                     }
 
                     // 💾 SAUVEGARDE MESSAGES POUR RESTAURATION
-                    const messageType = Object.keys(msg.message)[0];
-                    if (messageType !== "protocolMessage" && !msg.key.fromMe) {
+                    const msgType = Object.keys(msg.message)[0]; // CORRIGÉ ICI
+                    if (msgType !== "protocolMessage" && !msg.key.fromMe) {
                         const body = msg.message.conversation ||
                                      msg.message.extendedTextMessage?.text ||
                                      msg.message.imageMessage?.caption ||
@@ -761,7 +761,7 @@ ${colors.magenta}╔════════════════════
                             message: msg.message,
                             pushName: msg.pushName || sender,
                             timestamp: Date.now(),
-                            messageType: messageType
+                            messageType: msgType
                         };
 
                         messageStore.set(msg.key.id, savedMsg);
@@ -770,7 +770,7 @@ ${colors.magenta}╔════════════════════
                         fs.writeFileSync(filePath, JSON.stringify(savedMsg, null, 2));
 
                         // Sauvegarde image si présente
-                        if (messageType === 'imageMessage') {
+                        if (msgType === 'imageMessage') {
                             try {
                                 const imageMsg = msg.message.imageMessage;
                                 const stream = await downloadContentFromMessage(imageMsg, 'image');
