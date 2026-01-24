@@ -1,4 +1,4 @@
-// bot/index.js - VERSION COMPLÈTE AVEC CHARGEMENT COMMANDES - CORRIGÉE
+// bot/index.js - VERSION COMPLÈTE AVEC CHARGEMENT COMMANDES - CORRECTION DÉFINITIVE
 import { makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers, makeCacheableSignalKeyStore } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import P from 'pino';
@@ -172,11 +172,11 @@ async function sendFormattedMessage(sock, jid, messageText) {
 }
 
 // ============================================
-// 🔥 FONCTION POUR GÉNÉRER VRAI PAIRING CODE - CORRIGÉE
+// 🔥 FONCTION POUR GÉNÉRER VRAI PAIRING CODE - CORRECTION DÉFINITIVE
 // ============================================
 async function generateRealPairingCode(phoneNumber) {
-    console.log('\n🎯 GÉNÉRATION PAIRING CODE');
-    console.log('===========================');
+    console.log('\n🎯 GÉNÉRATION AUTOMATIQUE PAIRING CODE');
+    console.log('==========================================');
     
     try {
         // Nettoyer le numéro
@@ -185,7 +185,7 @@ async function generateRealPairingCode(phoneNumber) {
         
         console.log(`📱 Numéro formaté: ${formattedPhone}`);
         
-        // Créer un socket temporaire - IMPORTANT: utiliser le dossier de session
+        // Créer un socket temporaire
         const { state } = await useMultiFileAuthState(SESSION_PATH);
         
         const tempSock = makeWASocket({
@@ -197,14 +197,17 @@ async function generateRealPairingCode(phoneNumber) {
             },
             logger: P({ level: 'silent' }),
             browser: Browsers.ubuntu('Chrome'),
-            connectTimeoutMs: 30000
+            connectTimeoutMs: 30000,
+            retryRequestDelayMs: 1000
         });
         
-        // 🎯 GÉNÉRATION DU CODE
-        console.log('🔑 Appel de requestPairingCode()...');
+        // 🎯 GÉNÉRATION AUTOMATIQUE DU CODE
+        console.log('🔑 Appel à requestPairingCode()...');
         const pairingCode = await tempSock.requestPairingCode(formattedPhone);
         
-        // Formater le code
+        console.log(`✅ Code généré: ${pairingCode}`);
+        
+        // Formater si nécessaire
         let formattedCode = pairingCode;
         
         if (!pairingCode.includes('-') && pairingCode.length >= 8) {
@@ -212,13 +215,21 @@ async function generateRealPairingCode(phoneNumber) {
             console.log(`🔄 Code formaté: ${formattedCode}`);
         }
         
-        // Vérifier format
+        // Vérification du format
         if (formattedCode.match(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/)) {
             console.log(`✅ Format correct: ${formattedCode}`);
         } else {
             console.log(`⚠️  Format inhabituel: ${formattedCode}`);
         }
         
+        // ============================================
+        // 🎯🎯🎯 CORRECTION DÉFINITIVE : AFFICHAGE POUR LE SERVEUR
+        // ============================================
+        console.log('\n🎯🎯🎯 CODE DE PAIRING GÉNÉRÉ: ' + formattedCode + ' 🎯🎯🎯');
+        console.log(`📱 Pour: ${phoneNumber}`);
+        console.log(`⏰ ${new Date().toISOString()}`);
+        
+        // Fermeture du socket temporaire
         await tempSock.end();
         
         return formattedCode;
@@ -226,26 +237,19 @@ async function generateRealPairingCode(phoneNumber) {
     } catch (error) {
         console.error(`❌ ERREUR GÉNÉRATION: ${error.message}`);
         
-        // Fallback: code manuel
-        console.log('🔄 Génération code manuel...');
-        return generateManualPairingCode();
+        // RELANCER AUTOMATIQUEMENT - PAS DE CODE MANUEL
+        console.log('🔄 Nouvelle tentative dans 3 secondes...');
+        
+        // Attente
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // RÉESSAYER AUTOMATIQUEMENT
+        return await generateRealPairingCode(phoneNumber);
     }
-}
-
-function generateManualPairingCode() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let code = '';
-    
-    for (let i = 0; i < 8; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-        if (i === 3) code += '-';
-    }
-    
-    return code;
 }
 
 // ============================================
-// 🎯 FONCTION PRINCIPALE DU BOT - CORRIGÉE
+// 🎯 FONCTION PRINCIPALE DU BOT - CORRECTION DÉFINITIVE
 // ============================================
 async function startWhatsAppBot() {
     console.log('\n🚀 DÉMARRAGE BOT HEX-TECH');
@@ -258,45 +262,68 @@ async function startWhatsAppBot() {
     }
     
     // ============================================
-    // 🎯🎯🎯 ÉTAPE CRITIQUE: GÉNÉRATION DU PAIRING CODE AVANT TOUT
+    // 🎯🎯🎯 GÉNÉRATION DU PAIRING CODE - CORRECTION DÉFINITIVE
     // ============================================
-    console.log('\n🎯🎯🎯 GÉNÉRATION DU VRAI PAIRING CODE');
-    console.log('===========================================');
+    console.log('\n🎯🎯🎯 GÉNÉRATION DU PAIRING CODE');
+    console.log('===================================');
     
     let pairingCode;
-    try {
-        // Générer le VRAI code IMMÉDIATEMENT
-        pairingCode = await generateRealPairingCode(PHONE_NUMBER);
+    let attempts = 0;
+    const maxAttempts = 3;
+    
+    // Boucle de tentatives automatiques
+    while (attempts < maxAttempts && !pairingCode) {
+        attempts++;
+        console.log(`\n🔄 Tentative ${attempts}/${maxAttempts}`);
         
-        // 🎯 AFFICHER LE CODE AVEC LE FORMAT EXACT ATTENDU PAR LE SERVEUR
-        console.log(`\n🎯🎯🎯 CODE DE PAIRING GÉNÉRÉ: ${pairingCode} 🎯🎯🎯`);
-        console.log(`🔑 Code: ${pairingCode}`);
-        console.log(`📱 Pour: ${PHONE_NUMBER}`);
-        console.log('===========================================\n');
-        
-        // Sauvegarder le code avec format simple
-        const codeFile = path.join(SESSION_PATH, 'pairing_code.txt');
-        fs.writeFileSync(codeFile, pairingCode);
-        console.log(`💾 Code sauvegardé: ${codeFile}`);
-        
-        // Instructions - IMPORTANT pour l'utilisateur
-        console.log('\n📱 INSTRUCTIONS DE CONNEXION:');
-        console.log('==============================');
-        console.log('1. WhatsApp → Paramètres → Périphériques liés');
-        console.log('2. "CONNECTER UN APPAREIL" (pas "Connexion avec code QR")');
-        console.log('3. "Connecter avec un numéro de téléphone"');
-        console.log(`4. Entrez: ${pairingCode}`);
-        console.log('5. Validez et attendez');
-        console.log('==============================\n');
-        
-    } catch (error) {
-        console.error(`❌ ERREUR GÉNÉRATION CODE: ${error.message}`);
-        pairingCode = generateManualPairingCode();
-        console.log(`🎯 CODE MANUEL GÉNÉRÉ: ${pairingCode}`);
+        try {
+            pairingCode = await generateRealPairingCode(PHONE_NUMBER);
+            
+            // 🎯 AFFICHAGE DÉFINITIF POUR LE SERVEUR
+            console.log(`\n🎯🎯🎯 CODE DE PAIRING GÉNÉRÉ: ${pairingCode} 🎯🎯🎯`);
+            console.log(`🔑 Code: ${pairingCode}`);
+            console.log(`📱 Pour: ${PHONE_NUMBER}`);
+            console.log(`🆔 Session: ${SESSION_ID}`);
+            console.log('===========================================\n');
+            
+            // Sauvegarder le code
+            const codeFile = path.join(SESSION_PATH, 'pairing_code.txt');
+            fs.writeFileSync(codeFile, pairingCode);
+            console.log(`💾 Code sauvegardé: ${codeFile}`);
+            
+            break; // Sortir de la boucle si succès
+            
+        } catch (error) {
+            console.error(`❌ Échec tentative ${attempts}: ${error.message}`);
+            
+            if (attempts >= maxAttempts) {
+                console.error('🚨 Échec après 3 tentatives');
+                throw new Error('Impossible de générer le pairing code');
+            }
+            
+            // Attente avant prochaine tentative
+            const waitTime = attempts * 2000;
+            console.log(`⏳ Attente de ${waitTime/1000}s avant nouvelle tentative...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
     }
     
+    if (!pairingCode) {
+        throw new Error('Échec de la génération du pairing code');
+    }
+    
+    // Instructions
+    console.log('\n📱 INSTRUCTIONS DE CONNEXION:');
+    console.log('==============================');
+    console.log('1. WhatsApp → Paramètres → Périphériques liés');
+    console.log('2. "CONNECTER UN APPAREIL"');
+    console.log('3. "Connecter avec un numéro de téléphone"');
+    console.log(`4. Entrez: ${pairingCode}`);
+    console.log('5. Validez et attendez');
+    console.log('==============================\n');
+    
     // ============================================
-    // 🔧 CONTINUER AVEC LE BOT NORMAL
+    // 🔧 CONNEXION AU BOT
     // ============================================
     try {
         // 📁 État d'authentification
@@ -392,7 +419,7 @@ async function startWhatsAppBot() {
             if (isGroup && config.antiLink) {
                 const linkPatterns = [
                     /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/,
-                    /www\.[-a-zA-Z09@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/,
+                    /www\.[-a-zA-Z09@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([    -a-zA-Z0-9()@:%_\+.~#?&//=]*)/,
                     /[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/
                 ];
                 
@@ -506,10 +533,11 @@ console.log('║ 📱 Numéro: ' + PHONE_NUMBER.padEnd(30) + '║');
 console.log('║ 🆔 Session: ' + SESSION_ID.padEnd(30) + '║');
 console.log('║ 📁 Commandes: Chargement automatique activé     ║');
 console.log('║ 🔥 Génération: sock.requestPairingCode() réel   ║');
-console.log('║ ⚡ CORRECTION: Code généré IMMÉDIATEMENT         ║');
+console.log('║ ⚡ CORRECTION: Format serveur optimisé          ║');
+console.log('║ 🔄 Tentatives: 3 tentatives automatiques        ║');
 console.log('╚══════════════════════════════════════════════════╝\n');
 
-// Charger les commandes au démarrage (léger)
+// Charger les commandes au démarrage
 console.log('📁 Chargement initial des commandes...');
 loadCommands().then(() => {
     console.log(`✅ ${commands.size} commandes chargées`);
