@@ -1,11 +1,10 @@
-// bot/index.js - VERSION SIMPLIFIÉE AVEC NUMÉRO DYNAMIQUE
+// bot/index.js - VERSION CORRIGÉE POUR RENDER (UTILISE PHONE_NUMBER DE L'ENVIRONNEMENT)
 import { makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers, makeCacheableSignalKeyStore, fetchLatestBaileysVersion } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import P from 'pino';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import readline from 'readline';
 
 // Configuration ES6
 const __filename = fileURLToPath(import.meta.url);
@@ -16,9 +15,12 @@ const __dirname = path.dirname(__filename);
 // ============================================
 const SESSION_ID = process.env.SESSION_ID || 'default-session';
 const SESSION_PATH = process.env.SESSION_PATH || path.join(__dirname, '..', 'sessions', SESSION_ID);
+const PHONE_NUMBER = process.env.PHONE_NUMBER || ""; // 🎯 PREND LE NUMÉRO DEPUIS L'ENVIRONNEMENT
 
-console.log('\n🎯 BOT HEX-TECH - VERSION SIMPLIFIÉE 🎯');
-console.log('=========================================');
+console.log('\n🎯 BOT HEX-TECH - VERSION CORRIGÉE 🎯');
+console.log('=====================================');
+console.log(`📱 Numéro reçu: ${PHONE_NUMBER ? '********' + PHONE_NUMBER.slice(-4) : 'Aucun (attente saisie HTML)'}`);
+console.log(`🆔 Session: ${SESSION_ID}`);
 
 // ============================================
 // 📁 CHARGEMENT CONFIGURATION
@@ -32,7 +34,7 @@ try {
     } else {
         config = {
             prefix: ".",
-            ownerNumber: "", // Vide - sera défini par l'utilisateur
+            ownerNumber: PHONE_NUMBER || "", // Utilise le numéro de l'environnement
             botPublic: true,
             fakeRecording: false,
             antiLink: true,
@@ -45,7 +47,7 @@ try {
     }
 } catch (error) {
     console.log('❌ Erreur config:', error.message);
-    config = { prefix: ".", ownerNumber: "", botPublic: true };
+    config = { prefix: ".", ownerNumber: PHONE_NUMBER || "", botPublic: true };
 }
 
 // ============================================
@@ -159,51 +161,7 @@ function delay(ms) {
 }
 
 // ============================================
-// 🎯 FONCTION POUR DEMANDER LE NUMÉRO
-// ============================================
-function askForPhoneNumber() {
-    return new Promise((resolve) => {
-        const rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout
-        });
-
-        console.log('\n📱 ENTRER VOTRE NUMÉRO WHATSAPP');
-        console.log('===============================');
-        console.log('Format: 243XXXXXXXXX (RDC) ou votre code pays');
-        console.log('Exemple: 243816107573');
-        console.log('===============================\n');
-
-        rl.question('👉 Numéro WhatsApp: ', (phoneNumber) => {
-            rl.close();
-            
-            if (!phoneNumber || phoneNumber.trim().length < 9) {
-                console.log('❌ Numéro invalide. Format: 243XXXXXXXXX');
-                resolve(null);
-                return;
-            }
-            
-            // Nettoyer le numéro
-            const cleanNumber = phoneNumber.replace(/\D/g, '');
-            
-            // Ajouter automatiquement 243 si ce n'est pas déjà un code pays
-            if (cleanNumber.length === 9 && !cleanNumber.startsWith('243')) {
-                const formattedNumber = `243${cleanNumber}`;
-                console.log(`✅ Numéro formaté: ${formattedNumber}`);
-                resolve(formattedNumber);
-            } else if (cleanNumber.length >= 10 && cleanNumber.length <= 15) {
-                console.log(`✅ Numéro accepté: ${cleanNumber}`);
-                resolve(cleanNumber);
-            } else {
-                console.log('❌ Numéro invalide. Format attendu: 243XXXXXXXXX');
-                resolve(null);
-            }
-        });
-    });
-}
-
-// ============================================
-// 🎯 FONCTION PRINCIPALE DU BOT
+// 🎯 FONCTION PRINCIPALE DU BOT - CORRIGÉE
 // ============================================
 async function startWhatsAppBot() {
     console.log('\n🚀 DÉMARRAGE BOT HEX-TECH');
@@ -240,7 +198,7 @@ async function startWhatsAppBot() {
         // 📁 État d'authentification
         const { state, saveCreds } = await useMultiFileAuthState(SESSION_PATH);
         
-        // 🔧 Configuration socket SIMPLIFIÉE (comme ton 2ème code)
+        // 🔧 Configuration socket
         const sock = makeWASocket({
             version,
             logger: P({ level: 'silent' }),
@@ -259,63 +217,71 @@ async function startWhatsAppBot() {
         sock.ev.on("creds.update", saveCreds);
         
         let pairingCode = null;
-        let userPhoneNumber = null;
         
         // ============================================
-        // 🎯 GESTION CONNEXION (MÉTHODE SIMPLIFIÉE)
+        // 🎯 GESTION CONNEXION - CORRIGÉE
         // ============================================
         sock.ev.on("connection.update", async (update) => {
             const { connection, lastDisconnect, qr } = update;
             
-            // 🎯 DÉTECTION QR CODE → DEMANDE NUMÉRO → GÉNÉRATION PAIRING
+            // 🎯 DÉTECTION QR CODE → GÉNÉRATION PAIRING (AVEC NUMÉRO DE L'ENVIRONNEMENT)
             if (qr) {
                 console.log('\n📱 QR Code détecté!');
                 console.log('===================\n');
                 
-                // Demander le numéro à l'utilisateur
-                userPhoneNumber = await askForPhoneNumber();
+                // 🎯🎯🎯 UTILISER LE NUMÉRO DEPUIS LA VARIABLE D'ENVIRONNEMENT (ENVOYÉ PAR SERVER.JS)
+                const phoneNumber = PHONE_NUMBER;
                 
-                if (!userPhoneNumber) {
-                    console.log('❌ Numéro invalide, redémarrage...');
-                    setTimeout(() => startWhatsAppBot(), 3000);
+                if (!phoneNumber || phoneNumber.length < 8) {
+                    console.log('❌ ERREUR: Numéro WhatsApp non fourni');
+                    console.log('ℹ️  Le numéro doit être envoyé via variable d\'environnement PHONE_NUMBER');
+                    console.log('🔄 Le bot attendra qu\'un numéro soit fourni...');
                     return;
                 }
                 
-                console.log(`\n🔑 Génération pairing code pour: ${userPhoneNumber}`);
+                // Nettoyer et valider le numéro
+                const cleanNumber = phoneNumber.replace(/\D/g, '');
+                if (cleanNumber.length < 8) {
+                    console.log('❌ Numéro invalide. Format attendu: 243XXXXXXXXX ou votre code pays');
+                    return;
+                }
+                
+                console.log(`🔑 Génération pairing code pour: ${cleanNumber}`);
                 
                 try {
-                    // 🎯 GÉNÉRATION DU PAIRING CODE (méthode simple)
-                    const code = await sock.requestPairingCode(userPhoneNumber);
+                    // 🎯 GÉNÉRATION DU PAIRING CODE
+                    const code = await sock.requestPairingCode(cleanNumber);
                     
-                    // Formater le code
+                    // Formater le code (XXXX-XXXX)
                     let formattedCode = code;
                     if (!code.includes('-') && code.length >= 8) {
                         formattedCode = code.substring(0, 4) + '-' + code.substring(4, 8);
                     }
                     
                     // ============================================
-                    // 🎯🎯🎯 AFFICHAGE DU CODE
+                    // 🎯🎯🎯 AFFICHAGE DU CODE - FORMAT EXACT ATTENDU PAR SERVER.JS
                     // ============================================
-                    console.log('\n' + '═'.repeat(50));
-                    console.log('🎯🎯🎯 CODE DE PAIRING GÉNÉRÉ 🎯🎯🎯');
-                    console.log('═'.repeat(50));
+                    console.log(`\n🎯🎯🎯 CODE DE PAIRING GÉNÉRÉ: ${formattedCode} 🎯🎯🎯`);
                     console.log(`🔑 Code: ${formattedCode}`);
-                    console.log(`📱 Pour: ${userPhoneNumber}`);
-                    console.log('═'.repeat(50) + '\n');
+                    console.log(`📱 Pour: ${cleanNumber}`);
+                    console.log(`🆔 Session: ${SESSION_ID}`);
+                    console.log('===========================================\n');
                     
                     pairingCode = formattedCode;
                     
                     // Mettre à jour le propriétaire dans la config
-                    config.ownerNumber = userPhoneNumber;
+                    config.ownerNumber = cleanNumber;
                     
                     // Sauvegarder la config
                     try {
                         const configPath = path.join(__dirname, 'config.json');
                         fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-                        console.log('✅ Configuration mise à jour avec votre numéro');
-                    } catch (e) {}
+                        console.log('✅ Configuration mise à jour avec le numéro');
+                    } catch (e) {
+                        console.log('⚠️ Impossible de sauvegarder la configuration');
+                    }
                     
-                    // Instructions
+                    // Instructions (pour les logs)
                     console.log('📱 INSTRUCTIONS DE CONNEXION:');
                     console.log('==============================');
                     console.log('1. WhatsApp → Paramètres → Périphériques liés');
@@ -358,11 +324,6 @@ async function startWhatsAppBot() {
                 console.log('✅✅✅ BOT CONNECTÉ À WHATSAPP!');
                 console.log('✅'.repeat(10) + '\n');
                 
-                // Mettre à jour le numéro propriétaire si disponible
-                if (userPhoneNumber) {
-                    config.ownerNumber = userPhoneNumber;
-                }
-                
                 // Envoyer message de bienvenue au propriétaire
                 try {
                     if (config.ownerNumber) {
@@ -370,6 +331,7 @@ async function startWhatsAppBot() {
                         await sock.sendMessage(ownerJid, {
                             text: `🤖 *HexTech Bot* connecté!\n📱 Votre numéro: ${config.ownerNumber}\n🔑 Code pairing: ${pairingCode || 'N/A'}\n📅 ${new Date().toLocaleString()}\n\nTapez ${config.prefix}menu pour les commandes`
                         });
+                        console.log('✅ Message de bienvenue envoyé au propriétaire');
                     }
                 } catch (e) {
                     console.log('⚠️ Impossible d\'envoyer le message de bienvenue');
@@ -483,7 +445,7 @@ async function startWhatsAppBot() {
         });
         
         console.log('✅ Bot HexTech prêt!');
-        console.log('⏳ Attente QR code pour commencer...');
+        console.log('⏳ Attente QR code pour générer pairing code...');
         
     } catch (error) {
         console.error(`❌ ERREUR BOT: ${error.message}`);
@@ -496,14 +458,14 @@ async function startWhatsAppBot() {
 // 🚀 DÉMARRAGE
 // ============================================
 console.log('\n╔══════════════════════════════════════════════════╗');
-console.log('║            HEXTECH WHATSAPP BOT v5.0            ║');
+console.log('║            HEXTECH WHATSAPP BOT v6.0            ║');
 console.log('╠══════════════════════════════════════════════════╣');
-console.log('║ 🎯 Système: Pairing Code Dynamique              ║');
-console.log('║ 📱 Numéro: À saisir lors de la connexion        ║');
+console.log('║ 🎯 Système: Pairing Code via Environnement      ║');
+console.log('║ 📱 Numéro: Variable PHONE_NUMBER                ║');
 console.log('║ 🆔 Session: ' + SESSION_ID.padEnd(30) + '║');
 console.log('║ 📁 Commandes: Chargement automatique            ║');
-console.log('║ 🔥 Méthode: Simple et efficace                  ║');
-console.log('║ 👤 Pour: Tous les utilisateurs                  ║');
+console.log('║ 🔥 Format: XXXX-XXXX (exact pour server.js)    ║');
+console.log('║ 👤 Source: HTML → server.js → bot/index.js     ║');
 console.log('╚══════════════════════════════════════════════════╝\n');
 
 // Charger les commandes
@@ -518,9 +480,9 @@ loadCommands().then(() => {
 
 // Gestion erreurs
 process.on('uncaughtException', (error) => {
-    console.error(`⚠️ Erreur: ${error.message}`);
+    console.error(`⚠️ Erreur non capturée: ${error.message}`);
 });
 
 process.on('unhandledRejection', (reason) => {
-    console.error(`⚠️ Rejet: ${reason}`);
+    console.error(`⚠️ Promesse rejetée: ${reason}`);
 });
