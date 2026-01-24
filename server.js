@@ -1,4 +1,5 @@
-// server.js - VERSION DÉFINITIVE AVEC PAIRING CODE RÉEL
+// server.js - VERSION DÉFINITIVE AVEC PAIRING CODE BAILEYS RÉEL
+// Utilise directement la fonction requestPairingCode() de BaileyJS
 
 import express from 'express';
 import http from 'http';
@@ -7,6 +8,9 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { spawn } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
 
 // Configuration ES6 pour __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -28,10 +32,10 @@ app.use(express.static('public'));
 const bots = new Map();
 
 // ============================================
-// 📱 FONCTION POUR DÉMARRER UN BOT
+// 📱 FONCTION POUR DÉMARRER UN BOT AVEC PAIRING CODE RÉEL
 // ============================================
 async function startBot(sessionId, phoneNumber = null) {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
         try {
             // Vérifier si le bot existe déjà
             if (bots.has(sessionId)) {
@@ -51,15 +55,6 @@ async function startBot(sessionId, phoneNumber = null) {
                 fs.mkdirSync(sessionPath, { recursive: true });
             }
 
-            // Vérifier si le bot principal existe
-            const botMainPath = path.join(__dirname, 'bot', 'index.js');
-            if (!fs.existsSync(botMainPath)) {
-                return reject({ 
-                    status: 'error', 
-                    message: 'Fichier bot/index.js non trouvé. Créez d\'abord votre bot WhatsApp.' 
-                });
-            }
-
             console.log(`🚀 Démarrage du bot ${sessionId} pour: ${phoneNumber || 'Génération de pairing code'}`);
 
             // Variables d'environnement pour le bot
@@ -73,15 +68,42 @@ async function startBot(sessionId, phoneNumber = null) {
                 NODE_ENV: 'production',
                 FORCE_PAIRING_MODE: 'true',
                 DISABLE_QR: 'true',
-                // IMPORTANT: Forcer le bon chemin
-                NODE_PATH: path.join(__dirname, 'node_modules'),
-                NODE_OPTIONS: '--experimental-modules --es-module-specifier-resolution=node'
+                NODE_OPTIONS: '--loader ts-node/esm --experimental-specifier-resolution=node'
             };
 
             // Ajouter des options spécifiques à Render
             if (IS_RENDER) {
                 env.PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = 'true';
                 env.PUPPETEER_EXECUTABLE_PATH = '/usr/bin/chromium-browser';
+            }
+
+            // 🎯 IMPORTANT: Créer le fichier de configuration pour le bot
+            const botConfigPath = path.join(__dirname, 'bot', 'config.json');
+            let botConfig = {};
+            
+            if (fs.existsSync(botConfigPath)) {
+                try {
+                    botConfig = JSON.parse(fs.readFileSync(botConfigPath, 'utf8'));
+                } catch (e) {}
+            }
+            
+            // Mettre à jour la configuration
+            botConfig.ownerNumber = phoneNumber || "243816107573";
+            botConfig.prefix = ".";
+            botConfig.botPublic = true;
+            botConfig.alwaysOnline = true;
+            
+            // Sauvegarder la configuration
+            fs.writeFileSync(botConfigPath, JSON.stringify(botConfig, null, 2));
+            console.log(`📁 Configuration bot sauvegardée: ${botConfigPath}`);
+
+            // Vérifier si le bot principal existe
+            const botMainPath = path.join(__dirname, 'bot', 'index.js');
+            if (!fs.existsSync(botMainPath)) {
+                return reject({ 
+                    status: 'error', 
+                    message: 'Fichier bot/index.js non trouvé. Créez d\'abord votre bot WhatsApp.' 
+                });
             }
 
             // 🎯 DÉMARRER LE BOT DIRECTEMENT
@@ -107,9 +129,9 @@ async function startBot(sessionId, phoneNumber = null) {
                 pairingCode: null,
                 connected: false,
                 lastUpdate: Date.now(),
-                qrCode: null,
                 codeResolved: false,
-                pairingAttempted: false
+                pairingAttempted: false,
+                botConfig: botConfig
             };
 
             bots.set(sessionId, botData);
@@ -134,7 +156,7 @@ async function startBot(sessionId, phoneNumber = null) {
                 // Recherche spécifique pour les formats Bailey
                 const formats = [
                     // Format avec tiret: XXXX-XXXX (le vrai format Bailey)
-                    /CODE DE PAIRING.*?([A-Z0-9]{4}[-][A-Z0-9]{4})/i,
+                    /CODE DE PAIRING.*?([A-Z0-9]{4}[-][A-Z00-9]{4})/i,
                     /PAIRING.*?([A-Z0-9]{4}[-][A-Z0-9]{4})/i,
                     /pairing.*?([A-Z0-9]{4}[-][A-Z0-9]{4})/i,
                     
@@ -153,7 +175,11 @@ async function startBot(sessionId, phoneNumber = null) {
                     
                     // Détection générique
                     /([A-Z0-9]{4}[-][A-Z0-9]{4})/,
-                    /([0-9]{4}[-][0-9]{4})/
+                    /([0-9]{4}[-][0-9]{4})/,
+                    
+                    // NOUVEAU: Détection spécifique de la sortie console
+                    /🎯🎯🎯 CODE DE PAIRING GÉNÉRÉ: ([A-Z0-9]{4}[-][A-Z0-9]{4}) 🎯🎯🎯/i,
+                    /🎯🎯🎯 PAIRING_CODE_BAILEYS_GENERATED: ([A-Z0-9]{4}[-][A-Z0-9]{4}) 🎯🎯🎯/i
                 ];
                 
                 // Essayer tous les formats
@@ -165,7 +191,7 @@ async function startBot(sessionId, phoneNumber = null) {
                     }
                 }
                 
-                // Si trouvé, formater proprement (ajouter un tiret si absent)
+                // Si trouvé, formater proprement
                 if (pairingCode) {
                     // Normaliser le code
                     let cleanCode = pairingCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -182,7 +208,6 @@ async function startBot(sessionId, phoneNumber = null) {
                         console.log(`🎯🎯🎯 PAIRING CODE BAILEYS TROUVÉ pour ${sessionId}: ${cleanCode} 🎯🎯🎯`);
                         console.log(`📱 Numéro: ${phoneNumber}`);
                         console.log(`🔑 Code: ${cleanCode} (format: XXXX-XXXX)`);
-                        console.log(`📋 Instructions: WhatsApp → Paramètres → Périphériques liés → Connecter un appareil`);
                         
                         if (!botData.codeResolved) {
                             botData.codeResolved = true;
@@ -195,14 +220,15 @@ async function startBot(sessionId, phoneNumber = null) {
                                 immediateCode: true,
                                 note: `Utilisez ce code dans WhatsApp → Périphériques liés : ${cleanCode}`,
                                 format: 'XXXX-XXXX',
-                                instructions: 'Allez dans WhatsApp → Paramètres → Périphériques liés → Connecter un appareil → Entrer le code'
+                                instructions: 'Allez dans WhatsApp → Paramètres → Périphériques liés → Connecter un appareil'
                             });
                         }
                     }
                 }
                 
                 // Détecter la connexion réussie
-                if (output.includes('✅ Connecté à WhatsApp') || 
+                if (output.includes('✅✅✅ CONNECTÉ À WHATSAPP!') || 
+                    output.includes('✅ Connecté à WhatsApp') || 
                     output.includes('CONNECTÉ À WHATSAPP') ||
                     output.includes('connection.open') ||
                     output.includes('Authenticated')) {
@@ -290,17 +316,16 @@ async function startBot(sessionId, phoneNumber = null) {
                 }
             });
 
-            // Timeout après 60 secondes si pas de code
+            // Timeout après 90 secondes si pas de code
             setTimeout(() => {
                 if (!botData.codeResolved && !botData.pairingCode) {
-                    console.log(`⏰ Timeout pour ${sessionId}, code non généré après 60 secondes`);
-                    console.log(`📊 Statut: ${botData.status}, Pairing tenté: ${botData.pairingAttempted}`);
+                    console.log(`⏰ Timeout pour ${sessionId}, code non généré après 90 secondes`);
                     
                     botData.codeResolved = true;
                     resolve({
                         status: 'timeout',
                         sessionId: sessionId,
-                        message: 'Timeout: Le bot a démarré mais aucun pairing code n\'a été généré après 60 secondes',
+                        message: 'Timeout: Le bot a démarré mais aucun pairing code n\'a été généré',
                         pairingCode: null,
                         phoneNumber: phoneNumber,
                         botStatus: botData.status,
@@ -308,7 +333,7 @@ async function startBot(sessionId, phoneNumber = null) {
                         suggestion: 'Vérifiez que votre bot/index.js appelle bien sock.requestPairingCode()'
                     });
                 }
-            }, 60000);
+            }, 90000);
 
         } catch (error) {
             console.error('Erreur démarrage bot:', error);
@@ -407,11 +432,11 @@ async function getPairingCode(sessionId) {
                 } else {
                     // Réessayer dans 2 secondes
                     setTimeout(() => {
-                        if (Date.now() - botData.startTime > 90000) {
-                            // Timeout après 90 secondes
+                        if (Date.now() - botData.startTime > 120000) {
+                            // Timeout après 120 secondes
                             resolve({ 
                                 status: 'error', 
-                                message: 'Timeout: Pairing code non généré après 90 secondes',
+                                message: 'Timeout: Pairing code non généré après 2 minutes',
                                 sessionId: sessionId,
                                 botStatus: botData.status
                             });
@@ -477,11 +502,12 @@ app.get('/api/status', (req, res) => {
         environment: IS_RENDER ? 'Render' : 'Local',
         url: req.protocol + '://' + req.get('host'),
         ownerNumber: '243816107573',
-        version: '3.0',
-        pairingSystem: 'BAILEYS_PAIRING_CODE',
-        pairingFormat: 'XXXX-XXXX (8 caractères)',
+        version: '4.0',
+        pairingSystem: 'BAILEYS_REAL_PAIRING_CODE',
+        pairingFormat: 'XXXX-XXXX (8 caractères via requestPairingCode())',
         maxSessions: 20,
-        status: 'healthy'
+        status: 'healthy',
+        botEndpoint: '/api/bots/create'
     });
 });
 
@@ -570,7 +596,14 @@ app.post('/api/bots/create', async (req, res) => {
                 `Code disponible! Utilisez-le dans WhatsApp → Périphériques liés : ${result.pairingCode}` :
                 'Le bot démarre... Le code sera généré dans quelques secondes.',
             format: result.pairingCode ? 'XXXX-XXXX' : 'En attente',
-            instructions: result.pairingCode ? 'Allez dans WhatsApp → Paramètres → Périphériques liés → Connecter un appareil → Entrer le code' : null
+            instructions: result.pairingCode ? 'Allez dans WhatsApp → Paramètres → Périphériques liés → Connecter un appareil → Entrer le code' : null,
+            whatsappSteps: [
+                '1. Ouvrez WhatsApp sur votre téléphone',
+                '2. Paramètres → Périphériques liés → Connecter un appareil',
+                '3. Sélectionnez "Connecter avec un numéro de téléphone"',
+                '4. Entrez le code affiché',
+                '5. Validez et attendez la connexion'
+            ]
         });
 
     } catch (error) {
@@ -689,10 +722,50 @@ app.get('/health', (req, res) => {
         uptime: process.uptime(),
         environment: IS_RENDER ? 'Render' : 'Local',
         owner: '243816107573',
-        pairingSystem: 'BAILEYS_PAIRING_CODE',
-        pairingFormat: 'XXXX-XXXX (8 caractères)',
-        whatsappStatus: 'ready'
+        pairingSystem: 'BAILEYS_REAL_PAIRING_CODE',
+        pairingFormat: 'XXXX-XXXX (8 caractères via requestPairingCode())',
+        whatsappStatus: 'ready',
+        apiVersion: '4.0'
     });
+});
+
+// Route pour tester directement un numéro
+app.post('/api/test-pairing', async (req, res) => {
+    try {
+        const { phoneNumber } = req.body;
+        
+        if (!phoneNumber) {
+            return res.status(400).json({ 
+                status: 'error', 
+                message: 'Numéro requis' 
+            });
+        }
+        
+        const cleanNumber = phoneNumber.replace(/\D/g, '');
+        
+        // Créer une session temporaire
+        const tempSessionId = 'test-' + uuidv4().replace(/-/g, '').substring(0, 8);
+        
+        console.log(`🧪 Test pairing pour: ${cleanNumber} (${tempSessionId})`);
+        
+        // Démarrer le bot en mode test
+        const result = await startBot(tempSessionId, cleanNumber);
+        
+        if (result.pairingCode) {
+            // Arrêter le bot après avoir obtenu le code
+            setTimeout(() => {
+                stopBot(tempSessionId).catch(() => {});
+            }, 10000);
+        }
+        
+        res.json(result);
+        
+    } catch (error) {
+        res.status(500).json({ 
+            status: 'error', 
+            message: error.message 
+        });
+    }
 });
 
 // Route principale - sert l'HTML
@@ -753,18 +826,47 @@ app.get('/', (req, res) => {
                         color: #94a3b8;
                         font-size: 14px;
                     }
+                    .code-box {
+                        background: #1e293b;
+                        border: 2px solid #334155;
+                        border-radius: 10px;
+                        padding: 20px;
+                        margin: 20px 0;
+                        font-family: monospace;
+                        font-size: 1.2em;
+                        letter-spacing: 2px;
+                    }
                 </style>
             </head>
             <body>
                 <div class="container">
                     <h1>🤖 HexTech WhatsApp Bot Manager</h1>
-                    <div class="status">✅ Serveur en ligne - Système BAILEYS PAIRING CODE ACTIF</div>
+                    <div class="status">✅ Serveur en ligne - SYSTÈME PAIRING CODE RÉEL ACTIF</div>
+                    
                     <p>Interface HTML non trouvée. Placez votre fichier index.html dans le dossier "public/"</p>
+                    
                     <div class="info">
                         <p>👨‍💻 Développé par <strong>HexTech</strong> | 🇨🇩 RDC | 📞 Owner: 243816107573</p>
-                        <p>🚀 Version 3.0 | Mode: ${IS_RENDER ? 'Render 🌍' : 'Local 💻'}</p>
-                        <p>🔗 Format pairing: <strong>XXXX-XXXX</strong> (8 caractères - BaileyJS)</p>
-                        <p>⚡ Génération réelle via requestPairingCode()</p>
+                        <p>🚀 Version 4.0 | Mode: ${IS_RENDER ? 'Render 🌍' : 'Local 💻'}</p>
+                        <p>🔗 <strong>Système de pairing réel BaileyJS</strong></p>
+                        <p>⚡ Génération via <code>sock.requestPairingCode()</code></p>
+                        <p>🎯 Format: <strong>XXXX-XXXX</strong> (8 caractères)</p>
+                    </div>
+                    
+                    <h3>📡 API Endpoints:</h3>
+                    <div style="text-align: left; background: #0f172a; padding: 15px; border-radius: 10px; margin: 20px 0;">
+                        <code>POST /api/bots/create</code> - Créer un bot<br>
+                        <code>GET /api/pairing/:sessionId</code> - Récupérer code<br>
+                        <code>GET /api/status</code> - Statut serveur<br>
+                        <code>GET /health</code> - Santé serveur
+                    </div>
+                    
+                    <h3>📱 Utilisation:</h3>
+                    <div style="text-align: left; background: #0f172a; padding: 15px; border-radius: 10px;">
+                        1. Envoyez votre numéro WhatsApp via API<br>
+                        2. Le bot génère un vrai code BaileyJS<br>
+                        3. Utilisez le code dans WhatsApp → Périphériques liés<br>
+                        4. Le bot se connecte automatiquement
                     </div>
                 </div>
             </body>
@@ -779,12 +881,12 @@ app.get('/api/docs', (req, res) => {
     
     res.json({
         name: 'HexTech WhatsApp Bot API',
-        version: '3.0',
+        version: '4.0',
         environment: IS_RENDER ? 'Render' : 'Local',
         url: publicUrl,
         owner: '243816107573',
-        pairingSystem: 'BAILEYS_PAIRING_CODE',
-        pairingFormat: 'XXXX-XXXX (8 caractères via requestPairingCode())',
+        pairingSystem: 'BAILEYS_REAL_PAIRING_CODE',
+        pairingFormat: 'XXXX-XXXX (8 caractères via sock.requestPairingCode())',
         whatsappLinkingInstructions: [
             '1. Allez dans WhatsApp sur votre téléphone',
             '2. Paramètres → Périphériques liés → Connecter un appareil',
@@ -795,11 +897,12 @@ app.get('/api/docs', (req, res) => {
         endpoints: {
             'GET /api/status': 'Statut général du serveur',
             'GET /api/bots': 'Liste de tous les bots',
-            'POST /api/bots/create': 'Créer un nouveau bot WhatsApp',
+            'POST /api/bots/create': 'Créer un nouveau bot WhatsApp (avec numéro)',
             'DELETE /api/bots/:sessionId': 'Arrêter un bot spécifique',
             'GET /api/bots/:sessionId/logs': 'Logs d\'un bot spécifique',
             'GET /api/bots/:sessionId/status': 'Statut d\'un bot spécifique',
             'GET /api/pairing/:sessionId': 'Récupérer le pairing code',
+            'POST /api/test-pairing': 'Tester directement un numéro',
             'GET /health': 'Santé du serveur',
             'GET /': 'Interface web'
         },
@@ -807,7 +910,13 @@ app.get('/api/docs', (req, res) => {
             createBot: 'POST /api/bots/create { "phoneNumber": "243816107573" }',
             getStatus: 'GET /api/bots/hexgate-abc123/status',
             getLogs: 'GET /api/bots/hexgate-abc123/logs'
-        }
+        },
+        notes: [
+            'Le bot utilise la fonction réelle requestPairingCode() de BaileyJS',
+            'Le code généré est un vrai code WhatsApp de 8 caractères (XXXX-XXXX)',
+            'Le bot continue de fonctionner après la connexion',
+            'Toutes les fonctionnalités (restauration messages, quiz, etc.) sont actives'
+        ]
     });
 });
 
@@ -857,7 +966,7 @@ server.listen(PORT, '0.0.0.0', () => {
 ║ 🎯 Owner fixe: 243816107573${' '.repeat(26)} ║
 ║ 🔗 API: ${publicUrl}/api/*${' '.repeat(28)} ║
 ║ 🚀 Interface: ${publicUrl}${' '.repeat(29)} ║
-║ 🎯 PAIRING SYSTEM: BAILEYS requestPairingCode()${' '.repeat(6)} ║
+║ 🎯 PAIRING SYSTEM: BAILEYS requestPairingCode() RÉEL${' '.repeat(6)} ║
 ╚════════════════════════════════════════════════════════════════╝
     `);
     
@@ -871,7 +980,8 @@ server.listen(PORT, '0.0.0.0', () => {
     const dirs = [
         path.join(__dirname, 'public'),
         path.join(__dirname, 'sessions'),
-        path.join(__dirname, 'bot')
+        path.join(__dirname, 'bot'),
+        path.join(__dirname, 'bot', 'commands')
     ];
     
     dirs.forEach(dir => {
@@ -895,10 +1005,20 @@ server.listen(PORT, '0.0.0.0', () => {
     if (!fs.existsSync(botPath)) {
         console.log(`⚠️  Fichier bot/index.js non trouvé`);
         console.log(`👉 Créez votre bot Bailey dans: bot/index.js`);
+        console.log(`👉 Important: Le bot doit appeler sock.requestPairingCode()`);
     } else {
         console.log(`✅ Bot principal trouvé: ${path.relative(__dirname, botPath)}`);
-        console.log(`🎯 Format pairing code: XXXX-XXXX (8 caractères via requestPairingCode())`);
-        console.log(`⚡ Système de génération: BaileyJS réel (pas de simulation)`);
+        console.log(`🎯 Format pairing code: XXXX-XXXX (8 caractères)`);
+        console.log(`⚡ Système de génération: BaileyJS réel (requestPairingCode())`);
+    }
+    
+    // Vérifier les commandes
+    const commandsPath = path.join(__dirname, 'bot', 'commands');
+    if (fs.existsSync(commandsPath)) {
+        const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
+        console.log(`✅ ${commandFiles.length} fichiers de commandes trouvés`);
+    } else {
+        console.log(`📁 Dossier commands créé: bot/commands/`);
     }
     
     // Nettoyage périodique
@@ -912,6 +1032,10 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log('\n📊 API Documentation:');
     console.log(`   ${publicUrl}/api/docs`);
     console.log(`   ${publicUrl}/health`);
+    console.log('\n🎯 TEST RAPIDE:');
+    console.log(`   curl -X POST ${publicUrl}/api/bots/create \\`);
+    console.log(`        -H "Content-Type: application/json" \\`);
+    console.log(`        -d '{"phoneNumber": "243816107573"}'`);
 });
 
 // ============================================
@@ -946,8 +1070,7 @@ function shutdown() {
 // Capture des signaux d'arrêt
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
-process.on('SIGUSR2', shutdown); // Pour nodemon
+process.on('SIGUSR2', shutdown);
 
 // Export pour les tests
 export { app, startBot, stopBot, getPairingCode };
-
