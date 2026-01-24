@@ -1,3 +1,5 @@
+// server.js - VERSION COMPLÈTE CORRIGÉE
+
 import express from 'express';
 import http from 'http';
 import path from 'path';
@@ -69,11 +71,11 @@ async function startBot(sessionId, phoneNumber = null) {
                 WEB_MODE: 'true',
                 IS_RENDER: IS_RENDER ? 'true' : 'false',
                 NODE_ENV: 'production',
-                NODE_OPTIONS: '--experimental-modules --es-module-specifier-resolution=node --max-old-space-size=512',
-                RENDER_EXTERNAL_URL: RENDER_URL || '',
-                // Forcer le mode pairing code
                 FORCE_PAIRING_MODE: 'true',
-                DISABLE_QR: 'true'
+                DISABLE_QR: 'true',
+                // IMPORTANT: Forcer le bon chemin
+                NODE_PATH: path.join(__dirname, 'node_modules'),
+                NODE_OPTIONS: '--experimental-modules --es-module-specifier-resolution=node'
             };
 
             // Ajouter des options spécifiques à Render
@@ -88,7 +90,7 @@ async function startBot(sessionId, phoneNumber = null) {
                 '--es-module-specifier-resolution=node',
                 botMainPath
             ], {
-                cwd: __dirname,  // Exécuter depuis la racine
+                cwd: __dirname,
                 env: env,
                 stdio: ['pipe', 'pipe', 'pipe'],
                 detached: false
@@ -123,31 +125,52 @@ async function startBot(sessionId, phoneNumber = null) {
                 });
                 botData.lastUpdate = Date.now();
                 
-                // 🎯 DÉTECTER LE PAIRING CODE GÉNÉRÉ PAR LE BOT
-                const pairingMatch = output.match(/Code de pairing: (\w+)/i) || 
-                                    output.match(/pairing code: (\w+)/i) ||
-                                    output.match(/✅ Code de pairing: (\w+)/i) ||
-                                    output.match(/🎯 PAIRING_CODE_GENERATED: (\w+)/i);
+                // 🎯 DÉTECTER LE PAIRING CODE (versions plus permissives)
+                const pairingMatch = output.match(/CODE DE PAIRING: (\w+)/i) || 
+                                    output.match(/PAIRING CODE: (\w+)/i) ||
+                                    output.match(/✅✅✅ CODE DE PAIRING: (\w+)/i) ||
+                                    output.match(/🎯🎯🎯 PAIRING_CODE_GENERATED: (\w+)/i) ||
+                                    output.match(/🔑 Code: (\w+)/i) ||
+                                    output.match(/code.*: (\w+)/i) ||
+                                    output.match(/([A-Z0-9]{6})/); // Détecte tout code 6 caractères
                 
                 if (pairingMatch && pairingMatch[1]) {
-                    botData.pairingCode = pairingMatch[1];
-                    botData.status = 'pairing';
-                    console.log(`🎯 Pairing code détecté pour ${sessionId}: ${pairingMatch[1]}`);
-                    
-                    // Informer l'interface web si WebSocket est disponible
-                    if (global.io) {
-                        global.io.emit('pairingCode', {
-                            sessionId: sessionId,
-                            pairingCode: pairingMatch[1],
-                            phoneNumber: botData.phoneNumber
-                        });
+                    const code = pairingMatch[1].trim();
+                    if (code.length >= 4 && code.length <= 8) {
+                        botData.pairingCode = code;
+                        botData.status = 'pairing';
+                        console.log(`🎯🎯🎯 PAIRING CODE TROUVÉ pour ${sessionId}: ${code} 🎯🎯🎯`);
+                        
+                        // Informer immédiatement
+                        if (!botData.codeResolved) {
+                            botData.codeResolved = true;
+                            resolve({
+                                status: 'success',
+                                sessionId: sessionId,
+                                message: 'Code de pairing généré!',
+                                pairingCode: code,
+                                phoneNumber: phoneNumber,
+                                immediateCode: true,
+                                note: 'Utilisez ce code dans WhatsApp → Périphériques liés'
+                            });
+                        }
+                        
+                        // Informer l'interface web si WebSocket est disponible
+                        if (global.io) {
+                            global.io.emit('pairingCode', {
+                                sessionId: sessionId,
+                                pairingCode: code,
+                                phoneNumber: botData.phoneNumber
+                            });
+                        }
                     }
                 }
                 
                 // Détecter la connexion réussie
                 if (output.includes('✅ Connecté à WhatsApp') || 
                     output.includes('HEX-GATE CONNECTEE') ||
-                    output.includes('✅ Connecté') ||
+                    output.includes('CONNECTÉ À WHATSAPP') ||
+                    output.includes('✅✅✅ CONNECTÉ') ||
                     output.includes('READY') ||
                     output.includes('Authenticated') ||
                     output.includes('connection.open')) {
@@ -204,39 +227,31 @@ async function startBot(sessionId, phoneNumber = null) {
                     message: `Process error: ${err.message}`, 
                     timestamp: Date.now() 
                 });
+                
+                if (!botData.codeResolved) {
+                    botData.codeResolved = true;
+                    reject({ 
+                        status: 'error', 
+                        message: `Erreur processus: ${err.message}` 
+                    });
+                }
             });
 
-            // Attendre que le bot génère le pairing code (max 30 secondes)
-            const waitForPairingCode = () => {
-                return new Promise((resolve) => {
-                    let attempts = 0;
-                    const maxAttempts = 30;
-                    
-                    const checkInterval = setInterval(() => {
-                        if (botData.pairingCode) {
-                            clearInterval(checkInterval);
-                            resolve(botData.pairingCode);
-                        } else if (attempts >= maxAttempts) {
-                            clearInterval(checkInterval);
-                            resolve(null);
-                        }
-                        attempts++;
-                    }, 1000);
-                });
-            };
-
-            // Attendre le pairing code
-            waitForPairingCode().then((code) => {
-                resolve({
-                    status: code ? 'success' : 'waiting',
-                    sessionId: sessionId,
-                    message: code ? 'Bot démarré avec succès' : 'En attente du pairing code...',
-                    botStatus: botData.status,
-                    pairingCode: code,
-                    phoneNumber: phoneNumber,
-                    immediateCode: !!code
-                });
-            });
+            // Timeout après 45 secondes si pas de code
+            setTimeout(() => {
+                if (!botData.codeResolved && !botData.pairingCode) {
+                    console.log(`⏰ Timeout pour ${sessionId}, code non généré`);
+                    botData.codeResolved = true;
+                    resolve({
+                        status: 'timeout',
+                        sessionId: sessionId,
+                        message: 'Timeout: Pairing code non généré après 45 secondes',
+                        pairingCode: null,
+                        phoneNumber: phoneNumber,
+                        botStatus: botData.status
+                    });
+                }
+            }, 45000);
 
         } catch (error) {
             console.error('Erreur démarrage bot:', error);
@@ -334,11 +349,11 @@ async function getPairingCode(sessionId) {
                 } else {
                     // Réessayer dans 2 secondes
                     setTimeout(() => {
-                        if (Date.now() - botData.startTime > 30000) {
-                            // Timeout après 30 secondes
+                        if (Date.now() - botData.startTime > 60000) {
+                            // Timeout après 60 secondes
                             resolve({ 
                                 status: 'error', 
-                                message: 'Timeout: Pairing code non généré après 30 secondes',
+                                message: 'Timeout: Pairing code non généré après 60 secondes',
                                 sessionId: sessionId
                             });
                         } else {
@@ -484,7 +499,7 @@ app.post('/api/bots/create', async (req, res) => {
             status: result.status,
             sessionId: sessionId,
             message: result.message,
-            botStatus: result.botStatus,
+            botStatus: result.botStatus || 'starting',
             pairingCode: result.pairingCode,
             phoneNumber: cleanNumber,
             immediateCode: !!result.pairingCode,
