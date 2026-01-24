@@ -1,10 +1,11 @@
-// bot/index.js - VERSION COMPLÈTE AVEC GÉNÉRATION DE PAIRING CODE
+// bot/index.js - VERSION SIMPLIFIÉE AVEC NUMÉRO DYNAMIQUE
 import { makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers, makeCacheableSignalKeyStore, fetchLatestBaileysVersion } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import P from 'pino';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import readline from 'readline';
 
 // Configuration ES6
 const __filename = fileURLToPath(import.meta.url);
@@ -15,12 +16,9 @@ const __dirname = path.dirname(__filename);
 // ============================================
 const SESSION_ID = process.env.SESSION_ID || 'default-session';
 const SESSION_PATH = process.env.SESSION_PATH || path.join(__dirname, '..', 'sessions', SESSION_ID);
-const PHONE_NUMBER = process.env.PHONE_NUMBER || "243816107573";
-const IS_RENDER = process.env.IS_RENDER === 'true';
-const FORCE_PAIRING_MODE = process.env.FORCE_PAIRING_MODE === 'true';
 
-console.log('\n🎯 BOT HEX-TECH - CHARGEMENT COMPLET 🎯');
-console.log('========================================');
+console.log('\n🎯 BOT HEX-TECH - VERSION SIMPLIFIÉE 🎯');
+console.log('=========================================');
 
 // ============================================
 // 📁 CHARGEMENT CONFIGURATION
@@ -34,7 +32,7 @@ try {
     } else {
         config = {
             prefix: ".",
-            ownerNumber: PHONE_NUMBER,
+            ownerNumber: "", // Vide - sera défini par l'utilisateur
             botPublic: true,
             fakeRecording: false,
             antiLink: true,
@@ -47,11 +45,11 @@ try {
     }
 } catch (error) {
     console.log('❌ Erreur config:', error.message);
-    config = { prefix: ".", ownerNumber: PHONE_NUMBER, botPublic: true };
+    config = { prefix: ".", ownerNumber: "", botPublic: true };
 }
 
 // ============================================
-// 🎯 CHARGEMENT DES COMMANDES (TON SYSTÈME)
+// 🎯 CHARGEMENT DES COMMANDES
 // ============================================
 const commands = new Map();
 
@@ -61,22 +59,6 @@ async function loadCommands() {
         if (!fs.existsSync(commandsDir)) {
             console.log(`📁 Création dossier commands: ${commandsDir}`);
             fs.mkdirSync(commandsDir, { recursive: true });
-            
-            // Créer des exemples de commandes
-            const exampleCommands = [
-                {
-                    name: 'antilink.js',
-                    content: `// Commande antilink`
-                },
-                {
-                    name: 'welcome.js',
-                    content: `// Commande welcome`
-                }
-            ];
-            
-            for (const cmd of exampleCommands) {
-                fs.writeFileSync(path.join(commandsDir, cmd.name), cmd.content);
-            }
         }
         
         const commandFiles = fs.readdirSync(commandsDir).filter(file => file.endsWith('.js'));
@@ -110,7 +92,7 @@ async function loadCommands() {
 }
 
 // ============================================
-// 🔧 FONCTIONS UTILITAIRES (TON CODE)
+// 🔧 FONCTIONS UTILITAIRES
 // ============================================
 const randomEmojis = ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🤩", "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😣", "😖", "😫", "😩", "🥺", "😢", "😭", "😤", "😠", "😡", "🤬", "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤗", "🤔", "🤭", "🤫", "🤥", "😶", "😐", "😑", "😬", "🙄", "😯", "😦", "😧", "😮", "😲", "🥱", "😴", "🤤", "😪", "😵", "🤐", "🥴", "🤢", "🤮", "🤧", "😷", "🤒", "🤕", "🤑", "🤠", "😈", "👿", "👹", "👺", "🤡", "💩", "👻", "💀", "☠️", "👽", "👾", "🤖", "🎃", "😺", "😸", "😹", "😻", "😼", "😽", "🙀", "😿", "😾"];
 
@@ -177,18 +159,80 @@ function delay(ms) {
 }
 
 // ============================================
-// 🎯 FONCTION PRINCIPALE DU BOT - AVEC GÉNÉRATION PAIRING CODE
+// 🎯 FONCTION POUR DEMANDER LE NUMÉRO
+// ============================================
+function askForPhoneNumber() {
+    return new Promise((resolve) => {
+        const rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout
+        });
+
+        console.log('\n📱 ENTRER VOTRE NUMÉRO WHATSAPP');
+        console.log('===============================');
+        console.log('Format: 243XXXXXXXXX (RDC) ou votre code pays');
+        console.log('Exemple: 243816107573');
+        console.log('===============================\n');
+
+        rl.question('👉 Numéro WhatsApp: ', (phoneNumber) => {
+            rl.close();
+            
+            if (!phoneNumber || phoneNumber.trim().length < 9) {
+                console.log('❌ Numéro invalide. Format: 243XXXXXXXXX');
+                resolve(null);
+                return;
+            }
+            
+            // Nettoyer le numéro
+            const cleanNumber = phoneNumber.replace(/\D/g, '');
+            
+            // Ajouter automatiquement 243 si ce n'est pas déjà un code pays
+            if (cleanNumber.length === 9 && !cleanNumber.startsWith('243')) {
+                const formattedNumber = `243${cleanNumber}`;
+                console.log(`✅ Numéro formaté: ${formattedNumber}`);
+                resolve(formattedNumber);
+            } else if (cleanNumber.length >= 10 && cleanNumber.length <= 15) {
+                console.log(`✅ Numéro accepté: ${cleanNumber}`);
+                resolve(cleanNumber);
+            } else {
+                console.log('❌ Numéro invalide. Format attendu: 243XXXXXXXXX');
+                resolve(null);
+            }
+        });
+    });
+}
+
+// ============================================
+// 🎯 FONCTION PRINCIPALE DU BOT
 // ============================================
 async function startWhatsAppBot() {
     console.log('\n🚀 DÉMARRAGE BOT HEX-TECH');
-    console.log('==========================');
-    
-    // Créer dossier session
-    if (!fs.existsSync(SESSION_PATH)) {
+    console.log('==========================\n');
+
+    // Vérifier et nettoyer la session si nécessaire
+    if (fs.existsSync(SESSION_PATH)) {
+        console.log('📁 Session existante détectée...');
+        try {
+            const sessionFiles = fs.readdirSync(SESSION_PATH);
+            const hasCreds = sessionFiles.some(file => file.includes('creds'));
+            
+            if (hasCreds) {
+                console.log('✅ Session valide trouvée, tentative de connexion...');
+            } else {
+                console.log('⚠️ Session incomplète, nettoyage...');
+                fs.rmSync(SESSION_PATH, { recursive: true });
+                fs.mkdirSync(SESSION_PATH, { recursive: true });
+            }
+        } catch (err) {
+            console.log('🧹 Nettoyage session...');
+            fs.rmSync(SESSION_PATH, { recursive: true });
+            fs.mkdirSync(SESSION_PATH, { recursive: true });
+        }
+    } else {
         fs.mkdirSync(SESSION_PATH, { recursive: true });
-        console.log(`✅ Dossier session: ${SESSION_PATH}`);
+        console.log(`✅ Dossier session créé: ${SESSION_PATH}`);
     }
-    
+
     try {
         // Récupérer la dernière version de Bailey
         const { version } = await fetchLatestBaileysVersion();
@@ -196,7 +240,7 @@ async function startWhatsAppBot() {
         // 📁 État d'authentification
         const { state, saveCreds } = await useMultiFileAuthState(SESSION_PATH);
         
-        // 🔧 Configuration socket
+        // 🔧 Configuration socket SIMPLIFIÉE (comme ton 2ème code)
         const sock = makeWASocket({
             version,
             logger: P({ level: 'silent' }),
@@ -215,109 +259,92 @@ async function startWhatsAppBot() {
         sock.ev.on("creds.update", saveCreds);
         
         let pairingCode = null;
-        let pairingGenerated = false;
+        let userPhoneNumber = null;
         
-        // Gestion connexion
+        // ============================================
+        // 🎯 GESTION CONNEXION (MÉTHODE SIMPLIFIÉE)
+        // ============================================
         sock.ev.on("connection.update", async (update) => {
             const { connection, lastDisconnect, qr } = update;
             
+            // 🎯 DÉTECTION QR CODE → DEMANDE NUMÉRO → GÉNÉRATION PAIRING
             if (qr) {
-                console.log('\n📱 QR Code détecté - Passage en mode pairing code');
-                console.log('==================================================');
+                console.log('\n📱 QR Code détecté!');
+                console.log('===================\n');
                 
-                if (!pairingGenerated) {
-                    pairingGenerated = true;
+                // Demander le numéro à l'utilisateur
+                userPhoneNumber = await askForPhoneNumber();
+                
+                if (!userPhoneNumber) {
+                    console.log('❌ Numéro invalide, redémarrage...');
+                    setTimeout(() => startWhatsAppBot(), 3000);
+                    return;
+                }
+                
+                console.log(`\n🔑 Génération pairing code pour: ${userPhoneNumber}`);
+                
+                try {
+                    // 🎯 GÉNÉRATION DU PAIRING CODE (méthode simple)
+                    const code = await sock.requestPairingCode(userPhoneNumber);
                     
-                    try {
-                        console.log(`🔑 Génération pairing code pour: ${PHONE_NUMBER}`);
-                        
-                        // Nettoyer le numéro
-                        const cleanPhone = PHONE_NUMBER.replace(/\D/g, '');
-                        const formattedPhone = cleanPhone.startsWith('243') ? cleanPhone : `243${cleanPhone}`;
-                        
-                        console.log(`📱 Numéro formaté: ${formattedPhone}`);
-                        
-                        // 🎯 GÉNÉRATION DU PAIRING CODE
-                        const code = await sock.requestPairingCode(formattedPhone);
-                        
-                        // Formater le code
-                        let formattedCode = code;
-                        if (!code.includes('-') && code.length >= 8) {
-                            formattedCode = code.substring(0, 4) + '-' + code.substring(4, 8);
-                        }
-                        
-                        // ============================================
-                        // 🎯🎯🎯 AFFICHAGE POUR LE SERVEUR - FORMAT EXACT
-                        // ============================================
-                        console.log(`\n🎯🎯🎯 CODE DE PAIRING GÉNÉRÉ: ${formattedCode} 🎯🎯🎯`);
-                        console.log(`🔑 Code: ${formattedCode}`);
-                        console.log(`📱 Pour: ${PHONE_NUMBER}`);
-                        console.log(`🆔 Session: ${SESSION_ID}`);
-                        console.log('===========================================\n');
-                        
-                        pairingCode = formattedCode;
-                        
-                        // Sauvegarder le code
-                        const codeFile = path.join(SESSION_PATH, 'pairing_code.txt');
-                        fs.writeFileSync(codeFile, formattedCode);
-                        console.log(`💾 Code sauvegardé: ${codeFile}`);
-                        
-                        // Instructions
-                        console.log('\n📱 INSTRUCTIONS DE CONNEXION:');
-                        console.log('==============================');
-                        console.log('1. WhatsApp → Paramètres → Périphériques liés');
-                        console.log('2. "CONNECTER UN APPAREIL"');
-                        console.log('3. "Connecter avec un numéro de téléphone"');
-                        console.log(`4. Entrez: ${formattedCode}`);
-                        console.log('5. Validez et attendez la connexion');
-                        console.log('==============================\n');
-                        
-                        await delay(3000);
-                        
-                    } catch (pairError) {
-                        console.error(`❌ ERREUR PAIRING: ${pairError.message}`);
-                        
-                        // Nouvelle tentative après 5 secondes
-                        setTimeout(async () => {
-                            try {
-                                console.log('🔄 Nouvelle tentative de génération...');
-                                const cleanPhone = PHONE_NUMBER.replace(/\D/g, '');
-                                const formattedPhone = cleanPhone.startsWith('243') ? cleanPhone : `243${cleanPhone}`;
-                                
-                                const retryCode = await sock.requestPairingCode(formattedPhone);
-                                let formattedRetryCode = retryCode;
-                                
-                                if (!retryCode.includes('-') && retryCode.length >= 8) {
-                                    formattedRetryCode = retryCode.substring(0, 4) + '-' + retryCode.substring(4, 8);
-                                }
-                                
-                                console.log(`\n🎯🎯🎯 CODE DE PAIRING GÉNÉRÉ: ${formattedRetryCode} 🎯🎯🎯`);
-                                pairingCode = formattedRetryCode;
-                                
-                                const codeFile = path.join(SESSION_PATH, 'pairing_code.txt');
-                                fs.writeFileSync(codeFile, formattedRetryCode);
-                                console.log(`💾 Code sauvegardé: ${codeFile}`);
-                                
-                            } catch (retryError) {
-                                console.error(`❌ Nouvel échec: ${retryError.message}`);
-                            }
-                        }, 5000);
+                    // Formater le code
+                    let formattedCode = code;
+                    if (!code.includes('-') && code.length >= 8) {
+                        formattedCode = code.substring(0, 4) + '-' + code.substring(4, 8);
                     }
+                    
+                    // ============================================
+                    // 🎯🎯🎯 AFFICHAGE DU CODE
+                    // ============================================
+                    console.log('\n' + '═'.repeat(50));
+                    console.log('🎯🎯🎯 CODE DE PAIRING GÉNÉRÉ 🎯🎯🎯');
+                    console.log('═'.repeat(50));
+                    console.log(`🔑 Code: ${formattedCode}`);
+                    console.log(`📱 Pour: ${userPhoneNumber}`);
+                    console.log('═'.repeat(50) + '\n');
+                    
+                    pairingCode = formattedCode;
+                    
+                    // Mettre à jour le propriétaire dans la config
+                    config.ownerNumber = userPhoneNumber;
+                    
+                    // Sauvegarder la config
+                    try {
+                        const configPath = path.join(__dirname, 'config.json');
+                        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+                        console.log('✅ Configuration mise à jour avec votre numéro');
+                    } catch (e) {}
+                    
+                    // Instructions
+                    console.log('📱 INSTRUCTIONS DE CONNEXION:');
+                    console.log('==============================');
+                    console.log('1. WhatsApp → Paramètres → Périphériques liés');
+                    console.log('2. "CONNECTER UN APPAREIL"');
+                    console.log('3. "Connecter avec un numéro de téléphone"');
+                    console.log(`4. Entrez: ${formattedCode}`);
+                    console.log('5. Validez et attendez la connexion');
+                    console.log('==============================\n');
+                    
+                } catch (pairError) {
+                    console.error(`\n❌ ERREUR PAIRING: ${pairError.message}`);
+                    console.log('🔄 Redémarrage dans 5 secondes...');
+                    setTimeout(() => startWhatsAppBot(), 5000);
                 }
             }
             
+            // 🚫 GESTION DÉCONNEXION
             if (connection === "close") {
                 const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
-                console.log(`❌ Déconnecté: ${reason}`);
+                console.log(`\n❌ Déconnecté (code: ${reason})`);
                 
                 if (reason === DisconnectReason.loggedOut) {
+                    console.log('🧹 Session expirée, nettoyage...');
                     try {
                         fs.rmSync(SESSION_PATH, { recursive: true });
-                        console.log(`🧹 Session supprimée`);
                     } catch (err) {}
                     
                     console.log('🔄 Redémarrage du bot...');
-                    setTimeout(() => startWhatsAppBot(), 5000);
+                    setTimeout(() => startWhatsAppBot(), 3000);
                 } else {
                     console.log('🔄 Reconnexion...');
                     setTimeout(() => startWhatsAppBot(), 5000);
@@ -325,19 +352,31 @@ async function startWhatsAppBot() {
                 return;
             }
             
+            // ✅ CONNEXION RÉUSSIE
             if (connection === "open") {
-                console.log(`✅✅✅ CONNECTÉ À WHATSAPP!`);
+                console.log('\n' + '✅'.repeat(10));
+                console.log('✅✅✅ BOT CONNECTÉ À WHATSAPP!');
+                console.log('✅'.repeat(10) + '\n');
                 
-                // Envoyer message au propriétaire
+                // Mettre à jour le numéro propriétaire si disponible
+                if (userPhoneNumber) {
+                    config.ownerNumber = userPhoneNumber;
+                }
+                
+                // Envoyer message de bienvenue au propriétaire
                 try {
-                    const ownerJid = `${config.ownerNumber.replace(/\D/g, '')}@s.whatsapp.net`;
-                    await sock.sendMessage(ownerJid, {
-                        text: `🤖 *HexTech Bot* connecté!\n🆔 ${SESSION_ID}\n📱 ${PHONE_NUMBER}\n🎯 Code pairing: ${pairingCode || 'Non généré'}\n📅 ${new Date().toLocaleString()}`
-                    });
-                } catch (e) {}
+                    if (config.ownerNumber) {
+                        const ownerJid = `${config.ownerNumber.replace(/\D/g, '')}@s.whatsapp.net`;
+                        await sock.sendMessage(ownerJid, {
+                            text: `🤖 *HexTech Bot* connecté!\n📱 Votre numéro: ${config.ownerNumber}\n🔑 Code pairing: ${pairingCode || 'N/A'}\n📅 ${new Date().toLocaleString()}\n\nTapez ${config.prefix}menu pour les commandes`
+                        });
+                    }
+                } catch (e) {
+                    console.log('⚠️ Impossible d\'envoyer le message de bienvenue');
+                }
                 
-                // CHARGER LES COMMANDES APRÈS CONNEXION
-                console.log('\n📁 Chargement des commandes après connexion...');
+                // Charger les commandes
+                console.log('📁 Chargement des commandes...');
                 await loadCommands();
                 console.log(`✅ ${commands.size} commandes disponibles`);
             }
@@ -357,22 +396,9 @@ async function startWhatsAppBot() {
             const sender = msg.key.participant || from;
             const isGroup = from.endsWith('@g.us');
             
-            console.log(`📩 Message de ${sender}: ${text.substring(0, 50)}...`);
+            console.log(`📩 ${isGroup ? '[GROUPE]' : '[PRIVÉ]'} ${sender.split('@')[0]}: ${text.substring(0, 50)}...`);
             
-            // 🔧 RESTAURATION MESSAGES SUPPRIMÉS (ton code)
-            if (msg.message.protocolMessage?.type === 0) {
-                console.log(`🗑️ Message supprimé détecté`);
-                // Ton code de restauration ici...
-                return;
-            }
-            
-            // 📸 GESTION IMAGES
-            if (msg.message.imageMessage) {
-                console.log(`📸 Image reçue`);
-                // Ton code images ici...
-            }
-            
-            // 🔗 ANTILINK
+            // 🔗 ANTILINK (si activé)
             if (isGroup && config.antiLink) {
                 const linkPatterns = [
                     /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/,
@@ -383,16 +409,10 @@ async function startWhatsAppBot() {
                 let hasLink = linkPatterns.some(pattern => pattern.test(text));
                 
                 if (hasLink) {
-                    console.log(`🔗 Lien détecté`);
+                    console.log(`🔗 Lien détecté dans le groupe`);
                     // Ton code antilink ici...
                     return;
                 }
-            }
-            
-            // 👋 WELCOME MESSAGE
-            if (isGroup && msg.message.groupInviteMessage && welcomeEnabled) {
-                console.log(`👋 Nouveau membre`);
-                // Ton code welcome ici...
             }
             
             // 🎮 COMMANDES AVEC PRÉFIXE
@@ -402,50 +422,36 @@ async function startWhatsAppBot() {
                 
                 console.log(`🎮 Commande détectée: ${commandName}`);
                 
-                // 🔥 CHARGER/RECHARGER COMMANDES SI NÉCESSAIRE
+                // Recharger les commandes si nécessaire
                 if (commands.size === 0) {
-                    console.log('🔄 Chargement des commandes...');
                     await loadCommands();
                 }
                 
-                // Exécuter commande si elle existe
-                if (commands.has(commandName)) {
-                    const command = commands.get(commandName);
-                    try {
-                        await command.execute(sock, msg, args);
-                        console.log(`✅ Commande exécutée: ${commandName}`);
-                    } catch (err) {
-                        console.error(`❌ Erreur commande ${commandName}:`, err);
-                        await sock.sendMessage(from, {
-                            text: `❌ Erreur commande ${commandName}`
-                        });
-                    }
-                    return;
-                }
-                
-                // Commandes intégrées de base
+                // Commandes intégrées
                 switch (commandName) {
                     case 'ping':
                         await sock.sendMessage(from, { text: '🏓 Pong! HexTech Bot' });
                         break;
                     case 'menu':
                         let menuText = `🤖 *Menu Bot HexTech*\n\n`;
+                        menuText += `• ${config.prefix}ping - Test de réponse\n`;
+                        menuText += `• ${config.prefix}info - Informations du bot\n`;
+                        menuText += `• ${config.prefix}reload - Recharger commandes\n\n`;
                         
                         // Ajouter les commandes chargées
                         commands.forEach((cmd, name) => {
-                            menuText += `• ${config.prefix}${name} - ${cmd.description || 'Pas de description'}\n`;
+                            menuText += `• ${config.prefix}${name} - ${cmd.description || 'Commande'}\n`;
                         });
                         
-                        menuText += `\n🎯 ${commands.size} commandes disponibles`;
-                        menuText += `\n👑 Propriétaire: ${config.ownerNumber}`;
+                        menuText += `\n🎯 ${commands.size + 3} commandes disponibles`;
+                        menuText += `\n👑 Propriétaire: ${config.ownerNumber || 'Non défini'}`;
                         menuText += pairingCode ? `\n🔑 Code pairing: ${pairingCode}` : '';
                         
                         await sock.sendMessage(from, { text: menuText });
                         break;
                     case 'info':
                         await sock.sendMessage(from, {
-                            text: `📊 *Informations Bot*\n\n🆔 Session: ${SESSION_ID}\n📱 Numéro: ${PHONE_NUMBER}\n⚡ Préfixe: ${config.prefix}\n📁 Commandes: ${commands.size}\n🎯 Développé par HEX-TECH` + 
-                                  (pairingCode ? `\n🔑 Code pairing: ${pairingCode}` : '')
+                            text: `📊 *Informations Bot*\n\n🆔 Session: ${SESSION_ID}\n📱 Propriétaire: ${config.ownerNumber || 'Non défini'}\n⚡ Préfixe: ${config.prefix}\n📁 Commandes: ${commands.size}\n🎯 Développé par HEX-TECH\n📅 Connecté le: ${new Date().toLocaleString()}`
                         });
                         break;
                     case 'reload':
@@ -456,26 +462,32 @@ async function startWhatsAppBot() {
                         });
                         break;
                     default:
-                        await sock.sendMessage(from, {
-                            text: `❌ Commande inconnue: ${commandName}\nTapez ${config.prefix}menu pour la liste`
-                        });
+                        // Vérifier les commandes chargées
+                        if (commands.has(commandName)) {
+                            const command = commands.get(commandName);
+                            try {
+                                await command.execute(sock, msg, args);
+                            } catch (err) {
+                                console.error(`❌ Erreur commande ${commandName}:`, err);
+                                await sock.sendMessage(from, {
+                                    text: `❌ Erreur lors de l'exécution de ${commandName}`
+                                });
+                            }
+                        } else {
+                            await sock.sendMessage(from, {
+                                text: `❌ Commande inconnue: ${commandName}\nTapez ${config.prefix}menu pour la liste`
+                            });
+                        }
                 }
             }
         });
         
-        // Keep-alive
-        setInterval(async () => {
-            try {
-                await sock.sendPresenceUpdate('available');
-            } catch (e) {}
-        }, 60000);
-        
-        console.log('✅ Bot HexTech démarré!');
-        console.log(`📁 Commandes: ${commands.size} chargées`);
-        console.log('⏳ Attente détection QR pour générer pairing code...');
+        console.log('✅ Bot HexTech prêt!');
+        console.log('⏳ Attente QR code pour commencer...');
         
     } catch (error) {
         console.error(`❌ ERREUR BOT: ${error.message}`);
+        console.log('🔄 Redémarrage dans 10 secondes...');
         setTimeout(() => startWhatsAppBot(), 10000);
     }
 }
@@ -484,17 +496,17 @@ async function startWhatsAppBot() {
 // 🚀 DÉMARRAGE
 // ============================================
 console.log('\n╔══════════════════════════════════════════════════╗');
-console.log('║            HEXTECH WHATSAPP BOT v4.0            ║');
+console.log('║            HEXTECH WHATSAPP BOT v5.0            ║');
 console.log('╠══════════════════════════════════════════════════╣');
-console.log('║ 🎯 Système: VRAI Pairing Code BaileyJS          ║');
-console.log('║ 📱 Numéro: ' + PHONE_NUMBER.padEnd(30) + '║');
+console.log('║ 🎯 Système: Pairing Code Dynamique              ║');
+console.log('║ 📱 Numéro: À saisir lors de la connexion        ║');
 console.log('║ 🆔 Session: ' + SESSION_ID.padEnd(30) + '║');
-console.log('║ 📁 Commandes: Chargement automatique activé     ║');
-console.log('║ 🔥 Génération: sock.requestPairingCode() réel   ║');
-console.log('║ ⚡ Détection QR → Pairing Code automatique      ║');
+console.log('║ 📁 Commandes: Chargement automatique            ║');
+console.log('║ 🔥 Méthode: Simple et efficace                  ║');
+console.log('║ 👤 Pour: Tous les utilisateurs                  ║');
 console.log('╚══════════════════════════════════════════════════╝\n');
 
-// Charger les commandes au démarrage
+// Charger les commandes
 console.log('📁 Chargement initial des commandes...');
 loadCommands().then(() => {
     console.log(`✅ ${commands.size} commandes chargées`);
