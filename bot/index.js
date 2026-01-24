@@ -128,7 +128,7 @@ const DELETED_IMAGES_FOLDER = path.join(__dirname, 'deleted_images');
 // ============================================
 // 🎯 FONCTION POUR LE WEB
 // ============================================
-export async function startBotForWeb(phone, pairingCode = null) {
+async function startBotForWeb(phone, pairingCode = null) {
     console.log('🎯 DÉMARRAGE BOT POUR WEB');
     console.log(`📱 Numéro: ${phone || 'ATTENTE DE PAIRING'}`);
     console.log(`🔑 Mode: ${pairingCode ? 'CODE FOURNI' : 'GÉNÉRATION DE CODE'}`);
@@ -725,7 +725,7 @@ ${colors.magenta}╔════════════════════
                     }
 
                     // 💾 SAUVEGARDE MESSAGES POUR RESTAURATION
-                    const msgType = Object.keys(msg.message)[0]; // CORRIGÉ ICI
+                    const msgType = Object.keys(msg.message)[0];
                     if (msgType !== "protocolMessage" && !msg.key.fromMe) {
                         const body = msg.message.conversation ||
                                      msg.message.extendedTextMessage?.text ||
