@@ -1,4 +1,4 @@
-// server.js - VERSION CORRIGÉE POUR PUBLIC/INDEX.HTML
+// server.js - VERSION PROFESSIONNELLE POUR HEXTECH BOT MANAGER
 import express from 'express';
 import http from 'http';
 import path from 'path';
@@ -8,6 +8,7 @@ import { spawn } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
 import { createRequire } from 'module';
 import { promisify } from 'util';
+import WebSocket from 'ws';
 
 const require = createRequire(import.meta.url);
 const execAsync = promisify(require('child_process').exec);
@@ -30,6 +31,8 @@ app.use(express.static('public'));
 
 // Stockage des sessions
 const bots = new Map();
+// Stockage des connexions WebSocket
+const wsConnections = new Map();
 
 // ============================================
 // 📱 FONCTION POUR VÉRIFIER ET INSTALLER LES DÉPENDANCES
@@ -43,6 +46,13 @@ async function checkAndInstallDependencies() {
         if (!fs.existsSync(botDir)) {
             fs.mkdirSync(botDir, { recursive: true });
             console.log('✅ Dossier bot créé');
+        }
+
+        // Vérifier si le bot existe
+        const botMainPath = path.join(botDir, 'index.js');
+        if (!fs.existsSync(botMainPath)) {
+            console.log('❌ Fichier bot/index.js non trouvé');
+            return false;
         }
 
         // Créer un package.json pour le bot
@@ -128,7 +138,9 @@ async function startBot(sessionId, phoneNumber = null) {
                 PHONE_NUMBER: phoneNumber || '',
                 WEB_MODE: 'true',
                 IS_RENDER: IS_RENDER ? 'true' : 'false',
-                NODE_ENV: 'production'
+                NODE_ENV: 'production',
+                FORCE_PAIRING_MODE: 'true',
+                DISABLE_QR: 'true'
             };
 
             // Ajouter des options spécifiques à Render
@@ -137,10 +149,8 @@ async function startBot(sessionId, phoneNumber = null) {
                 env.PUPPETEER_EXECUTABLE_PATH = '/usr/bin/chromium-browser';
             }
 
-            // 🎯 CRÉER LE FICHIER BOT SIMPLIFIÉ S'IL N'EXISTE PAS
-            const botMainPath = path.join(__dirname, 'bot', 'index.js');
-            
             // Vérifier si le bot existe
+            const botMainPath = path.join(__dirname, 'bot', 'index.js');
             if (!fs.existsSync(botMainPath)) {
                 return reject({ 
                     status: 'error', 
@@ -187,7 +197,9 @@ async function startBot(sessionId, phoneNumber = null) {
                 connected: false,
                 lastUpdate: Date.now(),
                 codeResolved: false,
-                pairingAttempted: false
+                pairingAttempted: false,
+                pairingCodeGenerated: false,
+                connectionStatus: 'disconnected'
             };
 
             bots.set(sessionId, botData);
@@ -198,12 +210,16 @@ async function startBot(sessionId, phoneNumber = null) {
                 console.log(`[Bot ${sessionId}]: ${output}`);
                 
                 // Stocker le log
-                botData.logs.push({ 
+                const logEntry = { 
                     type: 'stdout', 
                     message: output, 
                     timestamp: Date.now() 
-                });
+                };
+                botData.logs.push(logEntry);
                 botData.lastUpdate = Date.now();
+                
+                // Envoyer le log via WebSocket
+                broadcastLog(sessionId, logEntry);
                 
                 // 🎯 DÉTECTION SPÉCIFIQUE DU PAIRING CODE
                 let pairingCode = null;
@@ -212,10 +228,9 @@ async function startBot(sessionId, phoneNumber = null) {
                 const formats = [
                     /🎯🎯🎯 CODE DE PAIRING GÉNÉRÉ: ([A-Z0-9]{4}[-][A-Z0-9]{4}) 🎯🎯🎯/i,
                     /CODE DE PAIRING.*?([A-Z0-9]{4}[-][A-Z0-9]{4})/i,
+                    /Pairing code.*?([A-Z0-9]{4}[-][A-Z0-9]{4})/i,
                     /([A-Z0-9]{4}[-][A-Z0-9]{4})/,
-                    /\b([A-Z0-9]{8})\b/,
-                    /Pairing code: ([A-Z0-9]{4}[-][A-Z0-9]{4})/i,
-                    /Code: ([A-Z0-9]{4}[-][A-Z0-9]{4})/i
+                    /\b([A-Z0-9]{8})\b/
                 ];
                 
                 for (const regex of formats) {
@@ -236,8 +251,13 @@ async function startBot(sessionId, phoneNumber = null) {
                         }
                         
                         botData.pairingCode = cleanCode;
+                        botData.pairingCodeGenerated = true;
                         botData.status = 'pairing';
+                        botData.connectionStatus = 'pairing_code_generated';
                         console.log(`🎯 PAIRING CODE DÉTECTÉ pour ${sessionId}: ${cleanCode}`);
+                        
+                        // Envoyer le code via WebSocket
+                        broadcastPairingCode(sessionId, cleanCode);
                         
                         if (!botData.codeResolved) {
                             botData.codeResolved = true;
@@ -247,22 +267,25 @@ async function startBot(sessionId, phoneNumber = null) {
                                 message: '✅ Code de pairing généré avec succès!',
                                 pairingCode: cleanCode,
                                 phoneNumber: phoneNumber,
-                                immediateCode: true,
-                                instructions: 'Allez dans WhatsApp → Paramètres → Périphériques liés → Connecter un appareil'
+                                immediateCode: true
                             });
                         }
                     }
                 }
                 
                 // Détecter la connexion réussie
-                if (output.includes('✅✅✅ CONNECTÉ À WHATSAPP!') || 
+                if (output.includes('✅ Connecté à WhatsApp!') || 
                     output.includes('Authenticated') ||
-                    output.includes('Connecté à WhatsApp') ||
-                    output.includes('connection === "open"')) {
+                    output.includes('connection === "open"') ||
+                    output.includes('connection update open')) {
                     botData.status = 'connected';
                     botData.connected = true;
+                    botData.connectionStatus = 'connected';
                     botData.connectedAt = Date.now();
                     console.log(`✅ Bot ${sessionId} connecté à WhatsApp!`);
+                    
+                    // Envoyer la mise à jour via WebSocket
+                    broadcastBotUpdate(sessionId);
                 }
                 
                 // Détecter que le bot tente de générer un pairing code
@@ -270,6 +293,8 @@ async function startBot(sessionId, phoneNumber = null) {
                     output.includes('pairing code') ||
                     output.includes('requestPairingCode')) {
                     botData.pairingAttempted = true;
+                    botData.connectionStatus = 'generating_pairing_code';
+                    broadcastBotUpdate(sessionId);
                 }
                 
                 // Limiter les logs en mémoire
@@ -282,18 +307,24 @@ async function startBot(sessionId, phoneNumber = null) {
             botProcess.stderr.on('data', (data) => {
                 const error = data.toString();
                 console.error(`[Bot ${sessionId} ERROR]: ${error}`);
-                botData.logs.push({ 
+                
+                const logEntry = { 
                     type: 'stderr', 
                     message: error, 
                     timestamp: Date.now() 
-                });
+                };
+                botData.logs.push(logEntry);
                 botData.lastUpdate = Date.now();
+                
+                // Envoyer l'erreur via WebSocket
+                broadcastLog(sessionId, logEntry);
                 
                 // Détecter les erreurs critiques
                 if (error.includes('ERR_MODULE_NOT_FOUND') ||
                     error.includes('Cannot find module') ||
                     error.includes('Error: Cannot find')) {
                     botData.status = 'error';
+                    botData.connectionStatus = 'error';
                     botData.error = error;
                     
                     console.error(`❌ Erreur de module pour ${sessionId}: ${error.substring(0, 200)}`);
@@ -306,6 +337,8 @@ async function startBot(sessionId, phoneNumber = null) {
                             details: error.substring(0, 200)
                         });
                     }
+                    
+                    broadcastBotUpdate(sessionId);
                 }
             });
 
@@ -314,7 +347,11 @@ async function startBot(sessionId, phoneNumber = null) {
                 console.log(`[Bot ${sessionId}] Arrêté avec code: ${code}`);
                 botData.status = 'stopped';
                 botData.connected = false;
+                botData.connectionStatus = 'stopped';
                 botData.endTime = Date.now();
+                
+                // Envoyer la mise à jour via WebSocket
+                broadcastBotUpdate(sessionId);
                 
                 setTimeout(() => {
                     if (bots.has(sessionId) && bots.get(sessionId).status === 'stopped') {
@@ -327,11 +364,16 @@ async function startBot(sessionId, phoneNumber = null) {
             botProcess.on('error', (err) => {
                 console.error(`[Bot ${sessionId} PROCESS ERROR]: ${err.message}`);
                 botData.status = 'error';
+                botData.connectionStatus = 'error';
                 botData.logs.push({ 
                     type: 'error', 
                     message: `Process error: ${err.message}`, 
                     timestamp: Date.now() 
                 });
+                
+                // Envoyer l'erreur via WebSocket
+                broadcastLog(sessionId, { type: 'error', message: err.message });
+                broadcastBotUpdate(sessionId);
                 
                 if (!botData.codeResolved) {
                     botData.codeResolved = true;
@@ -386,6 +428,57 @@ async function startBot(sessionId, phoneNumber = null) {
 // 🔧 FONCTIONS UTILITAIRES
 // ============================================
 
+// Diffuser les logs via WebSocket
+function broadcastLog(sessionId, logEntry) {
+    const connections = wsConnections.get(sessionId) || [];
+    connections.forEach(ws => {
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'log',
+                data: logEntry,
+                sessionId: sessionId
+            }));
+        }
+    });
+}
+
+// Diffuser le code de pairing via WebSocket
+function broadcastPairingCode(sessionId, pairingCode) {
+    const connections = wsConnections.get(sessionId) || [];
+    connections.forEach(ws => {
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'pairing_code',
+                pairingCode: pairingCode,
+                sessionId: sessionId,
+                timestamp: Date.now()
+            }));
+        }
+    });
+}
+
+// Diffuser les mises à jour du bot via WebSocket
+function broadcastBotUpdate(sessionId) {
+    const botData = bots.get(sessionId);
+    if (!botData) return;
+    
+    const connections = wsConnections.get(sessionId) || [];
+    connections.forEach(ws => {
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'bot_update',
+                sessionId: sessionId,
+                status: botData.status,
+                connectionStatus: botData.connectionStatus,
+                phoneNumber: botData.phoneNumber,
+                pairingCode: botData.pairingCode,
+                connected: botData.connected,
+                uptime: Date.now() - botData.startTime
+            }));
+        }
+    });
+}
+
 async function stopBot(sessionId) {
     return new Promise((resolve, reject) => {
         if (!bots.has(sessionId)) {
@@ -404,7 +497,11 @@ async function stopBot(sessionId) {
             
             botData.status = 'stopped';
             botData.connected = false;
+            botData.connectionStatus = 'stopped';
             botData.endTime = Date.now();
+            
+            // Envoyer la mise à jour via WebSocket
+            broadcastBotUpdate(sessionId);
             
             setTimeout(() => {
                 if (bots.has(sessionId)) {
@@ -445,7 +542,8 @@ async function getPairingCode(sessionId) {
                 sessionId: sessionId,
                 phoneNumber: botData.phoneNumber,
                 botStatus: botData.status,
-                connected: botData.connected || false
+                connected: botData.connected || false,
+                connectionStatus: botData.connectionStatus
             });
         } else {
             // Vérifier périodiquement pendant 30 secondes
@@ -468,6 +566,55 @@ async function getPairingCode(sessionId) {
                     });
                 }
             }, 1000);
+        }
+    });
+}
+
+async function sendPhoneNumberToBot(sessionId, phoneNumber) {
+    return new Promise((resolve, reject) => {
+        if (!bots.has(sessionId)) {
+            return reject({ 
+                status: 'error', 
+                message: 'Bot non trouvé' 
+            });
+        }
+
+        const botData = bots.get(sessionId);
+        
+        try {
+            // Mettre à jour le numéro
+            botData.phoneNumber = phoneNumber;
+            
+            // Envoyer le numéro au processus bot via stdin
+            if (botData.process && botData.process.stdin.writable) {
+                botData.process.stdin.write(`PHONE_NUMBER_INPUT:${phoneNumber}\n`);
+                
+                // Ajouter un log
+                const logEntry = {
+                    type: 'info',
+                    message: `Numéro envoyé au bot: ${phoneNumber}`,
+                    timestamp: Date.now()
+                };
+                botData.logs.push(logEntry);
+                broadcastLog(sessionId, logEntry);
+                
+                resolve({
+                    status: 'success',
+                    message: 'Numéro envoyé avec succès au bot',
+                    sessionId: sessionId,
+                    phoneNumber: phoneNumber
+                });
+            } else {
+                reject({
+                    status: 'error',
+                    message: 'Impossible d\'envoyer le numéro au bot (processus non disponible)'
+                });
+            }
+        } catch (error) {
+            reject({
+                status: 'error',
+                message: `Erreur lors de l'envoi du numéro: ${error.message}`
+            });
         }
     });
 }
@@ -498,14 +645,20 @@ app.get('/api/status', (req, res) => {
         bot.status === 'connected' || bot.status === 'running' || bot.status === 'pairing'
     ).length;
 
+    const totalMemory = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
+    
     res.json({
-        status: 'active',
+        success: true,
         platform: 'HexTech WhatsApp Bot Manager',
         version: '3.0',
         activeBots: activeBots,
         totalSessions: bots.size,
         serverTime: new Date().toISOString(),
+        uptime: Math.floor(process.uptime()),
+        memoryUsage: `${totalMemory}MB`,
         environment: IS_RENDER ? 'Render' : 'Local',
+        url: req.protocol + '://' + req.get('host'),
+        whatsapp: 'active',
         pairingSystem: 'active'
     });
 });
@@ -515,11 +668,14 @@ app.get('/api/bots', (req, res) => {
     const botList = Array.from(bots.values()).map(bot => ({
         sessionId: bot.sessionId,
         status: bot.status,
+        connectionStatus: bot.connectionStatus,
         phoneNumber: bot.phoneNumber,
         startTime: bot.startTime,
         pairingCode: bot.pairingCode,
+        pairingCodeGenerated: bot.pairingCodeGenerated,
         connected: bot.connected || false,
-        uptime: Date.now() - bot.startTime
+        uptime: Date.now() - bot.startTime,
+        logsCount: bot.logs.length
     }));
 
     res.json({
@@ -598,7 +754,50 @@ app.post('/api/bots/create', async (req, res) => {
     }
 });
 
-// POST /api/bots/:sessionId/add-phone - Ajouter un numéro à un bot existant
+// POST /api/bots/:sessionId/send-phone - Envoyer un numéro à un bot existant
+app.post('/api/bots/:sessionId/send-phone', async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const { phoneNumber } = req.body;
+        
+        if (!phoneNumber) {
+            return res.status(400).json({ 
+                success: false,
+                message: 'Numéro de téléphone requis' 
+            });
+        }
+
+        // Nettoyer le numéro
+        const cleanNumber = phoneNumber.replace(/\D/g, '');
+        
+        if (cleanNumber.length < 8) {
+            return res.status(400).json({ 
+                success: false,
+                message: 'Numéro invalide (minimum 8 chiffres)' 
+            });
+        }
+
+        // Envoyer le numéro au bot
+        const result = await sendPhoneNumberToBot(sessionId, cleanNumber);
+        
+        res.json({
+            success: result.status === 'success',
+            status: result.status,
+            message: result.message,
+            sessionId: sessionId,
+            phoneNumber: cleanNumber
+        });
+
+    } catch (error) {
+        console.error('Erreur envoi numéro:', error);
+        res.status(500).json({ 
+            success: false,
+            message: error.message || 'Erreur lors de l\'envoi du numéro' 
+        });
+    }
+});
+
+// POST /api/bots/:sessionId/add-phone - Ajouter/modifier un numéro pour un bot
 app.post('/api/bots/:sessionId/add-phone', async (req, res) => {
     try {
         const { sessionId } = req.params;
@@ -677,16 +876,18 @@ app.get('/api/bots/:sessionId/status', (req, res) => {
         success: true,
         sessionId: sessionId,
         status: botData.status,
+        connectionStatus: botData.connectionStatus,
         phoneNumber: botData.phoneNumber,
         connected: botData.connected || false,
         pairingCode: botData.pairingCode,
+        pairingCodeGenerated: botData.pairingCodeGenerated,
         startTime: botData.startTime,
         uptime: Date.now() - botData.startTime,
         logsCount: botData.logs.length
     });
 });
 
-// GET /api/bots/:sessionId/logs - Récupérer les logs d'un bot (JSON)
+// GET /api/bots/:sessionId/logs - Récupérer les logs d'un bot
 app.get('/api/bots/:sessionId/logs', (req, res) => {
     const { sessionId } = req.params;
     const botData = bots.get(sessionId);
@@ -698,12 +899,23 @@ app.get('/api/bots/:sessionId/logs', (req, res) => {
         });
     }
     
+    // Formater les logs pour l'affichage
+    const formattedLogs = botData.logs.slice(-100).map(log => {
+        const time = new Date(log.timestamp).toLocaleTimeString('fr-FR', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+        return `[${time}] [${log.type.toUpperCase()}] ${log.message.trim()}`;
+    });
+    
     res.json({
         success: true,
-        logs: botData.logs.slice(-100), // Derniers 100 logs
+        logs: formattedLogs,
         sessionId: sessionId,
         status: botData.status,
-        pairingCode: botData.pairingCode || null
+        pairingCode: botData.pairingCode || null,
+        totalLogs: botData.logs.length
     });
 });
 
@@ -725,7 +937,8 @@ app.get('/api/pairing/:sessionId', async (req, res) => {
             pairingCode: result.pairingCode,
             sessionId: result.sessionId,
             phoneNumber: result.phoneNumber,
-            botStatus: result.botStatus
+            botStatus: result.botStatus,
+            connectionStatus: result.connectionStatus
         });
         
     } catch (error) {
@@ -736,8 +949,8 @@ app.get('/api/pairing/:sessionId', async (req, res) => {
     }
 });
 
-// POST /api/bots/:sessionId/stop - Arrêter un bot
-app.post('/api/bots/:sessionId/stop', async (req, res) => {
+// DELETE /api/bots/:sessionId - Arrêter un bot
+app.delete('/api/bots/:sessionId', async (req, res) => {
     try {
         const { sessionId } = req.params;
         const result = await stopBot(sessionId);
@@ -765,7 +978,17 @@ app.get('/health', (req, res) => {
     res.json({
         status: 'healthy',
         activeBots: activeBots,
-        environment: IS_RENDER ? 'Render' : 'Local'
+        environment: IS_RENDER ? 'Render' : 'Local',
+        timestamp: new Date().toISOString()
+    });
+});
+
+// Route pour WebSocket (pour le client JS)
+app.get('/ws', (req, res) => {
+    res.json({
+        success: true,
+        message: 'WebSocket endpoint',
+        wsUrl: `ws://${req.get('host')}/ws`
     });
 });
 
@@ -792,26 +1015,86 @@ app.use((err, req, res, next) => {
 });
 
 // ============================================
-// 🚀 DÉMARRAGE DU SERVEUR
+// 🚀 DÉMARRAGE DU SERVEUR ET WEBSOCKET
 // ============================================
 const server = http.createServer(app);
 
+// Créer le serveur WebSocket
+const wss = new WebSocket.Server({ server });
+
+// Gérer les connexions WebSocket
+wss.on('connection', (ws, req) => {
+    console.log('🔗 Nouvelle connexion WebSocket');
+    
+    // Récupérer l'ID de session depuis l'URL
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const sessionId = url.searchParams.get('sessionId');
+    
+    if (sessionId) {
+        // Stocker la connexion
+        if (!wsConnections.has(sessionId)) {
+            wsConnections.set(sessionId, []);
+        }
+        wsConnections.get(sessionId).push(ws);
+        
+        // Envoyer l'état initial
+        const botData = bots.get(sessionId);
+        if (botData) {
+            ws.send(JSON.stringify({
+                type: 'initial_state',
+                sessionId: sessionId,
+                status: botData.status,
+                phoneNumber: botData.phoneNumber,
+                pairingCode: botData.pairingCode,
+                connected: botData.connected,
+                logs: botData.logs.slice(-50)
+            }));
+        }
+        
+        // Gérer la déconnexion
+        ws.on('close', () => {
+            console.log(`🔗 Déconnexion WebSocket pour session: ${sessionId}`);
+            const connections = wsConnections.get(sessionId);
+            if (connections) {
+                const index = connections.indexOf(ws);
+                if (index > -1) {
+                    connections.splice(index, 1);
+                }
+                if (connections.length === 0) {
+                    wsConnections.delete(sessionId);
+                }
+            }
+        });
+        
+        // Gérer les messages du client
+        ws.on('message', (message) => {
+            try {
+                const data = JSON.parse(message);
+                if (data.type === 'ping') {
+                    ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+                }
+            } catch (error) {
+                console.error('Erreur traitement message WebSocket:', error);
+            }
+        });
+    }
+});
+
+// Démarrer le serveur
 server.listen(PORT, '0.0.0.0', () => {
     const publicUrl = RENDER_URL || `http://localhost:${PORT}`;
     
     console.log(`
-╔════════════════════════════════════════════════════════════════╗
-║                HEXTECH WHATSAPP BOT MANAGER                   ║
-╠════════════════════════════════════════════════════════════════╣
-║ 🌐 URL publique: ${publicUrl.padEnd(40)} ║
-║ 📁 Port: ${PORT.toString().padEnd(45)} ║
-║ 📱 Interface: ${publicUrl}${' '.repeat(28)} ║
-║ 🔧 API Endpoints:                                             ║
-║   • ${publicUrl}/api/status${' '.repeat(37)} ║
-║   • ${publicUrl}/api/bots${' '.repeat(38)} ║
-║   • ${publicUrl}/api/bots/create${' '.repeat(31)} ║
-║ 🎯 Système: Pairing Code BaileyJS${' '.repeat(19)} ║
-╚════════════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════════════════╗
+║                    HEXTECH WHATSAPP BOT MANAGER v3.0                    ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║ 🌐 URL publique: ${publicUrl.padEnd(55)} ║
+║ 📁 Port: ${PORT.toString().padEnd(58)} ║
+║ 📱 Interface: ${publicUrl}${' '.repeat(50 - publicUrl.length)} ║
+║ 🔗 WebSocket: ws://${publicUrl.replace('http://', '').replace('https://', '')}/ws ║
+║ 🎯 Système: Pairing Code BaileyJS - Compatible ES Modules${' '.repeat(10)} ║
+║ 👑 Propriétaire: 243816107573${' '.repeat(38)} ║
+╚══════════════════════════════════════════════════════════════════════════╝
     `);
     
     // Créer les dossiers nécessaires
@@ -833,9 +1116,17 @@ server.listen(PORT, '0.0.0.0', () => {
     setInterval(cleanupSessions, 60000);
     console.log('🔄 Nettoyage automatique activé');
     
+    // Vérifier les dépendances au démarrage
+    checkAndInstallDependencies().then(() => {
+        console.log('✅ Dépendances vérifiées avec succès');
+    }).catch(error => {
+        console.error('❌ Erreur vérification dépendances:', error);
+    });
+    
     console.log('\n🚀 SERVEUR PRÊT !');
     console.log(`👉 Accédez à l'interface: ${publicUrl}`);
-    console.log('👉 Créez des bots via l\'interface web');
+    console.log(`👉 Créez des bots via l'interface web`);
+    console.log(`👉 WebSocket disponible pour les mises à jour en temps réel`);
 });
 
 // Gestion arrêt
@@ -847,8 +1138,14 @@ function shutdown() {
         promises.push(stopBot(sessionId).catch(() => {}));
     });
     
+    // Fermer toutes les connexions WebSocket
+    wss.clients.forEach(client => {
+        client.close();
+    });
+    
     Promise.all(promises).then(() => {
         console.log('✅ Tous les bots arrêtés');
+        console.log('✅ Connexions WebSocket fermées');
         process.exit(0);
     });
     
@@ -860,4 +1157,4 @@ function shutdown() {
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
-export { app, startBot, stopBot, getPairingCode };
+export { app, startBot, stopBot, getPairingCode, sendPhoneNumberToBot };
