@@ -34,8 +34,8 @@ try {
       logLevel: "silent",
       telegramLink: "https://t.me/hextechcar",
       botImageUrl: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTyERDdGHGjmXPv_6tCBIChmD-svWkJatQlpzfxY5WqFg&s=10",
-      restoreMessages: true,  // NOUVEAU: Activation restauration messages
-      restoreImages: true     // NOUVEAU: Activation restauration images
+      restoreMessages: true,
+      restoreImages: true
     };
     fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
     console.log('✅ config.json créé avec valeurs par défaut');
@@ -173,8 +173,6 @@ if (missingModules.length > 0) {
       import('./index.js');
     }, 3000);
     
-    // ⚠️ CORRECTION : NE PAS UTILISER "return" ICI
-    
   } catch (error) {
     console.log('❌ Erreur installation automatique:', error.message);
     console.log('\n🛠️ INSTALLEZ MANUELLEMENT:');
@@ -198,8 +196,7 @@ if (missingModules.length > 0) {
   }
 }
 
-import {
-  default as makeWASocket,
+import makeWASocket, {
   useMultiFileAuthState,
   downloadContentFromMessage,
   DisconnectReason,
@@ -222,11 +219,122 @@ let sock = null;
 let botReady = false;
 let pairingCodes = new Map();
 
-// 📋 FONCTIONS POUR L'API
+// ==================== FONCTIONS POUR L'API ====================
+// 📋 Ces fonctions sont appelées par server.js
+
+/**
+ * Vérifie si le bot est prêt
+ * @returns {boolean} État du bot
+ */
 function isBotReady() {
   return botReady;
 }
 
+/**
+ * Fonction utilitaire pour formater les numéros (partagée entre index.js et server.js)
+ * @param {string} phone - Numéro à formater
+ * @returns {string} Numéro formaté
+ */
+function formatPhoneNumber(phone) {
+  const cleanPhone = phone.replace(/\D/g, '');
+  
+  // Liste des indicatifs pays courants
+  const countryCodes = [
+    '243', // RD Congo
+    '224', // Guinée
+    '225', // Côte d'Ivoire
+    '226', // Burkina Faso
+    '227', // Niger
+    '228', // Togo
+    '229', // Bénin
+    '230', // Maurice
+    '231', // Liberia
+    '232', // Sierra Leone
+    '233', // Ghana
+    '234', // Nigeria
+    '235', // Tchad
+    '236', // République centrafricaine
+    '237', // Cameroun
+    '238', // Cap-Vert
+    '239', // Sao Tomé-et-Principe
+    '240', // Guinée équatoriale
+    '241', // Gabon
+    '242', // Congo
+    '244', // Angola
+    '245', // Guinée-Bissau
+    '246', // Territoire britannique de l'océan Indien
+    '247', // Ascension
+    '248', // Seychelles
+    '249', // Soudan
+    '250', // Rwanda
+    '251', // Éthiopie
+    '252', // Somalie
+    '253', // Djibouti
+    '254', // Kenya
+    '255', // Tanzanie
+    '256', // Ouganda
+    '257', // Burundi
+    '258', // Mozambique
+    '260', // Zambie
+    '261', // Madagascar
+    '262', // Réunion
+    '263', // Zimbabwe
+    '264', // Namibie
+    '265', // Malawi
+    '266', // Lesotho
+    '267', // Botswana
+    '268', // Eswatini
+    '269', // Comores
+    '290', // Sainte-Hélène
+    '291', // Érythrée
+    '211', // Soudan du Sud
+    '212', // Maroc
+    '213', // Algérie
+    '216', // Tunisie
+    '218', // Libye
+    '220', // Gambie
+    '221', // Sénégal
+    '222', // Mauritanie
+    '223'  // Mali
+  ];
+  
+  // Vérifier si le numéro commence déjà par un indicatif connu
+  for (const code of countryCodes) {
+    if (cleanPhone.startsWith(code)) {
+      return cleanPhone; // Garder tel quel
+    }
+  }
+  
+  // Vérifier les indicatifs à 2 chiffres pour l'Afrique
+  const firstTwo = cleanPhone.substring(0, 2);
+  if (['21', '22', '23', '24', '25', '26'].includes(firstTwo) && cleanPhone.length >= 10) {
+    return cleanPhone; // Probablement déjà complet avec indicatif 2 chiffres
+  }
+  
+  // Si le numéro commence par 0 (numéro local)
+  if (cleanPhone.startsWith('0')) {
+    return '243' + cleanPhone.substring(1); // RD Congo par défaut
+  }
+  
+  // Numéro court sans indicatif
+  if (cleanPhone.length < 9) {
+    return '243' + cleanPhone; // RD Congo par défaut
+  }
+  
+  // Numéro long sans 0 au début (peut-être déjà complet)
+  if (cleanPhone.length >= 9) {
+    return cleanPhone; // Garder tel quel
+  }
+  
+  // Par défaut, ajouter 243
+  return '243' + cleanPhone;
+}
+
+/**
+ * Génére un code de pairing pour un numéro WhatsApp
+ * @param {string} phone - Numéro WhatsApp
+ * @returns {Promise<string|null>} Code de pairing ou null en cas d'erreur
+ */
 async function generatePairCode(phone) {
   try {
     if (!sock) {
@@ -234,34 +342,74 @@ async function generatePairCode(phone) {
       return null;
     }
     
-    const cleanPhone = phone.replace(/\D/g, '');
-    const phoneWithCountry = cleanPhone.startsWith('243') ? cleanPhone : `243${cleanPhone}`;
+    // Formater le numéro de manière cohérente avec server.js
+    const formattedPhone = formatPhoneNumber(phone);
     
-    console.log(`📱 Génération pair code pour: ${phoneWithCountry}`);
+    console.log(`📱 [API] Génération pair code pour: ${formattedPhone} (original: ${phone})`);
     
-    const code = await sock.requestPairingCode(phoneWithCountry);
+    // Vérifier si un code a déjà été généré récemment pour ce numéro
+    const existingCode = pairingCodes.get(formattedPhone);
+    if (existingCode && (Date.now() - existingCode.timestamp < 60000)) {
+      console.log(`🔄 [API] Code déjà généré récemment pour ${formattedPhone}`);
+      return existingCode.code;
+    }
+    
+    // Générer le code via l'API WhatsApp
+    const code = await sock.requestPairingCode(formattedPhone);
     
     if (code) {
-      pairingCodes.set(phoneWithCountry, {
+      // Stocker le code dans la Map
+      pairingCodes.set(formattedPhone, {
         code: code,
         timestamp: Date.now()
       });
       
+      // Nettoyer après 5 minutes
       setTimeout(() => {
-        pairingCodes.delete(phoneWithCountry);
+        pairingCodes.delete(formattedPhone);
+        console.log(`🧹 [API] Code expiré pour ${formattedPhone}`);
       }, 300000);
       
-      console.log(`✅ Pair code généré: ${code} pour ${phoneWithCountry}`);
+      console.log(`✅ [API] Pair code généré: ${code} pour ${formattedPhone}`);
+      
+      // Envoyer une notification au propriétaire si c'est un nouveau numéro
+      const cleanOwnerNumber = config.ownerNumber.replace(/\D/g, '');
+      const cleanUserNumber = formattedPhone.replace(/\D/g, '');
+      
+      if (cleanUserNumber !== cleanOwnerNumber) {
+        try {
+          await sock.sendMessage(OWNER_NUMBER, {
+            text: `📱 *NOUVELLE DEMANDE DE PAIRING*\n\n👤 Numéro: ${formattedPhone}\n🔑 Code généré: ${code}\n⏰ Date: ${new Date().toLocaleString()}\n🌍 Indicatif détecté: ${formattedPhone.substring(0, 3)}`
+          });
+          console.log(`📨 Notification envoyée au propriétaire`);
+        } catch (notifyError) {
+          console.log(`⚠️ Impossible d'envoyer notification: ${notifyError.message}`);
+        }
+      }
+      
       return code;
     }
     
+    console.log(`❌ [API] Impossible de générer le code pour ${formattedPhone}`);
     return null;
+    
   } catch (error) {
-    console.log(`❌ Erreur génération pair code: ${error.message}`);
+    console.log(`❌ [API] Erreur génération pair code: ${error.message}`);
+    
+    // Messages d'erreur plus informatifs
+    if (error.message.includes('rate limit')) {
+      console.log('⚠️ [API] Rate limit WhatsApp atteint, veuillez patienter');
+    } else if (error.message.includes('invalid') || error.message.includes('Invalid')) {
+      console.log(`⚠️ [API] Numéro invalide pour WhatsApp: ${phone}`);
+    } else if (error.message.includes('not registered')) {
+      console.log(`⚠️ [API] Numéro non enregistré sur WhatsApp: ${phone}`);
+    }
+    
     return null;
   }
 }
 
+// Autres fonctions utilitaires
 function findBotParticipant(participants, botJid) {
   const possibleBotIds = [
     botJid,
@@ -691,7 +839,6 @@ Utilisation:
           console.log("link error:", err);
           await sock.sendMessage(from, { text: "❌ Erreur lors de la récupération du lien du groupe" });
         }
-      }
     });
 
     // Commande .stealpp (gardée)
@@ -1346,789 +1493,4 @@ function isOwner(senderJid) {
 }
 
 // Fonction pour vérifier si un expéditeur est admin dans un groupe
-async function isAdminInGroup(sock, jid, senderJid) {
-  try {
-    if (!jid.endsWith("@g.us")) return false;
-    
-    const metadata = await sock.groupMetadata(jid);
-    const participant = metadata.participants.find(p => p.id === senderJid);
-    
-    if (!participant) return false;
-    
-    return participant.admin === "admin" || participant.admin === "superadmin";
-  } catch (error) {
-    console.log(`${colors.yellow}⚠️ Erreur vérification admin: ${error.message}${colors.reset}`);
-    return false;
-  }
-}
-
-// 📱 Affichage logo
-function displayBanner() {
-  console.clear();
-  console.log(`
-${colors.magenta}╔══════════════════════════════════════════════════╗
-║${colors.bright}${colors.cyan}         WHATSAPP BOT - HEXGATE EDITION          ${colors.reset}${colors.magenta}║
-╠══════════════════════════════════════════════════╣
-║${colors.green} ✅ BOT EN MODE PUBLIC - TOUS ACCÈS AUTORISÉS${colors.magenta}║
-║${colors.green} ✅ FAKE RECORDING ACTIVÉ                    ${colors.magenta}║
-║${colors.green} ✅ RESTAURATION MESSAGES: ${restoreMessages ? 'ACTIVÉ' : 'DÉSACTIVÉ'}     ${colors.magenta}║
-║${colors.green} ✅ RESTAURATION IMAGES: ${restoreImages ? 'ACTIVÉ' : 'DÉSACTIVÉ'}        ${colors.magenta}║
-║${colors.green} ✅ Détection multiple messages              ${colors.magenta}║
-║${colors.green} ✅ Réactions emoji aléatoires               ${colors.magenta}║
-║${colors.green} ✅ Chargement complet commandes             ${colors.magenta}║
-║${colors.green} ✅ API INTÉGRÉE POUR PAIRING                ${colors.magenta}║
-╚══════════════════════════════════════════════════╝${colors.reset}
-`);
-}
-
-// ============================================
-// ⚡ FONCTION PRINCIPALE DU BOT OPTIMISÉE
-// ============================================
-async function startBot() {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-
-  async function askForPhoneNumber() {
-    return new Promise((resolve) => {
-      rl.question(`${colors.cyan}┏━━━━━━━━━━━━━━❖ ＡＲＣＡＮＥ ❖━━━━━━━━━━━━━━┓
-┃                                              ┃
-┃   _   _ _______  __   _____ _____ ____ _   _  ┃
-┃  | | | | ____\ \/ /  |_   _| ____/ ___| | | | ┃
-┃  | |_| |  _|  \  /_____| | |  _|| |   | |_| | ┃
-┃  |  _  | |___ /  \_____| | | |__| |___|  _  | ┃
-┃  |_| |_|_____/_/\_\    |_| |_____\____|_| |_| ┃
-┃                                              ┃
-┃  📱 INSÉREZ VOTRE NUMÉRO WHATSAPP :            ┃
-┃                                              ┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━┛
-${colors.reset}`, (phone) => {
-        resolve(phone.trim());
-      });
-    });
-  }
-
-  try {
-    displayBanner();
-    
-    const { state, saveCreds } = await useMultiFileAuthState("auth_info_baileys");
-    const { version } = await fetchLatestBaileysVersion();
-    
-    sock = makeWASocket({
-      version,
-      logger: P({ level: logLevel }),
-      printQRInTerminal: false,
-      auth: state,
-      browser: Browsers.ubuntu("Chrome"),
-      markOnlineOnConnect: alwaysOnline,
-      syncFullHistory: false,
-    });
-
-    const commandHandler = new CommandHandler();
-
-    sock.ev.on("creds.update", saveCreds);
-
-    sock.ev.on("connection.update", async (update) => {
-      const { connection, lastDisconnect, qr } = update;
-      
-      if (qr) {
-        const phoneNumber = await askForPhoneNumber();
-        if (!phoneNumber || phoneNumber.length < 9) {
-          console.log(`${colors.red}❌ Numéro invalide${colors.reset}`);
-          process.exit(1);
-        }
-
-        try {
-          const code = await sock.requestPairingCode(phoneNumber);
-          console.log(`${colors.green}✅ Code de pairing: ${code}${colors.reset}`);
-          console.log(`${colors.cyan}📱 Appuyez sur les trois points > Périphériques liés > Ajouter un périphérique sur WhatsApp${colors.reset}`);
-          await delay(3000);
-        } catch (pairError) {
-          console.log(`${colors.red}❌ Erreur pairing: ${pairError.message}${colors.reset}`);
-          process.exit(1);
-        }
-      }
-      
-      if (connection === "close") {
-        const reason = new Error(lastDisconnect?.error)?.output?.statusCode;
-        if (reason === DisconnectReason.loggedOut) {
-          console.log(`${colors.red}❌ Déconnecté, suppression des données d'authentification...${colors.reset}`);
-          exec("rm -rf auth_info_baileys", () => {
-            console.log(`${colors.yellow}🔄 Redémarrage du bot...${colors.reset}`);
-            startBot();
-          });
-        } else {
-          console.log(`${colors.yellow}🔄 Reconnexion...${colors.reset}`);
-          startBot();
-        }
-      } else if (connection === "open") {
-        console.log(`${colors.green}✅ Connecté à WhatsApp!${colors.reset}`);
-        console.log(`${colors.cyan}🔓 Mode: ${botPublic ? 'PUBLIC' : 'PRIVÉ'}${colors.reset}`);
-        console.log(`${colors.cyan}🎤 Fake Recording: ${fakeRecording ? 'ACTIVÉ' : 'DÉSACTIVÉ'}${colors.reset}`);
-        console.log(`${colors.cyan}🔄 Restauration Messages: ${restoreMessages ? 'ACTIVÉ' : 'DÉSACTIVÉ'}${colors.reset}`);
-        console.log(`${colors.cyan}🖼️ Restauration Images: ${restoreImages ? 'ACTIVÉ' : 'DÉSACTIVÉ'}${colors.reset}`);
-        
-        try {
-          const confirmMessage = `✅ *HEX-GATE CONNECTEE*\n\n🚀 *HEXGATE V1* est en ligne!\n📊 *Commandes:* ${commandHandler.getCommandList().length}\n🔧 *Mode:* ${botPublic ? 'PUBLIC' : 'PRIVÉ'}\n🎤 *Fake Recording:* ${fakeRecording ? 'ACTIVÉ' : 'DÉSACTIVÉ'}\n🔄 *Restauration Messages:* ${restoreMessages ? 'ACTIVÉ' : 'DÉSACTIVÉ'}\n🖼️ *Restauration Images:* ${restoreImages ? 'ACTIVÉ' : 'DÉSACTIVÉ'}\n🔗 *systeme:* tapez menu`;
-          
-          await sock.sendMessage(OWNER_NUMBER, { text: confirmMessage });
-          console.log(`${colors.green}✅ Confirmation envoyée au propriétaire: ${OWNER_NUMBER}${colors.reset}`);
-        } catch (error) {
-          console.log(`${colors.yellow}⚠️ Impossible d'envoyer message au propriétaire: ${error.message}${colors.reset}`);
-        }
-        
-        botReady = true;
-      }
-    });
-
-    // Charger le module viewonce
-    try {
-      const { saveViewOnce } = await import("./viewonce/store.js");
-      
-      sock.ev.on("messages.upsert", async ({ messages }) => {
-        const msg = messages[0];
-        if (!msg.message) return;
-
-        const jid = msg.key.remoteJid;
-
-        const viewOnce =
-          msg.message.viewOnceMessageV2 ||
-          msg.message.viewOnceMessageV2Extension;
-
-        if (!viewOnce) return;
-
-        const inner =
-          viewOnce.message.imageMessage ||
-          viewOnce.message.videoMessage;
-
-        if (!inner) return;
-
-        try {
-          const type = inner.mimetype.startsWith("image") ? "image" : "video";
-          const stream = await downloadContentFromMessage(inner, type);
-          let buffer = Buffer.from([]);
-
-          for await (const chunk of stream) {
-            buffer = Buffer.concat([buffer, chunk]);
-          }
-
-          saveViewOnce(jid, {
-            type,
-            buffer: buffer.toString("base64"),
-            caption: inner.caption || "",
-            from: msg.key.participant || msg.key.remoteJid,
-            time: Date.now()
-          });
-
-          console.log("✅ Vue unique interceptée AVANT ouverture");
-
-        } catch (e) {
-          console.log("❌ Erreur interception vue unique", e);
-        }
-      });
-    } catch (error) {
-      console.log("⚠️ Module viewonce non chargé:", error.message);
-    }
-
-    sock.ev.on("group-participants.update", async (update) => {
-      try {
-        if (!welcomeEnabled) return;
-
-        if (update.action !== "add") return;
-
-        const groupJid = update.id;
-        const newMemberJid = update.participants[0];
-        const newMemberName = newMemberJid.split("@")[0];
-
-        const text = `
-┏━━━❖ ＡＲＣＡＮＥ❖━━━━┓
-┃ @${newMemberName}
-┃ 
-┃ 𝙱𝚒𝚎𝚗𝚟𝚎𝚗𝚞𝚎 ! 𝚙𝚊𝚞𝚟𝚛𝚎 𝚖𝚘𝚛𝚝𝚎𝚕
-┗━━━━━━━━━━━━━━━━━━┛
-    `.trim();
-
-        await sock.sendMessage(groupJid, {
-          image: { url: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRhoFTz9jVFxTVGAuh9RJIaNF0wH8WGvlOHM-q50RHZzg&s=10" },
-          caption: text,
-          mentions: [newMemberJid]
-        });
-
-      } catch (err) {
-        console.log("auto welcome error:", err);
-      }
-    });
-
-    // 🎤 FAKE RECORDING FEATURE
-    sock.ev.on("messages.upsert", async ({ messages }) => {
-      try {
-        if (!fakeRecording) return;
-        
-        const msg = messages[0];
-        if (!msg.message || msg.key.fromMe) return;
-
-        try {
-          await sock.sendPresenceUpdate('recording', msg.key.remoteJid);
-          const waitTime = Math.floor(Math.random() * 2000) + 1000;
-          await delay(waitTime);
-          await sock.sendPresenceUpdate('available', msg.key.remoteJid);
-          console.log(`${colors.magenta}🎤 Fake recording simulé pour ${msg.key.remoteJid} (${waitTime}ms)${colors.reset}`);
-        } catch (recordingError) {}
-      } catch (error) {
-        console.log(`${colors.yellow}⚠️ Erreur fake recording: ${error.message}${colors.reset}`);
-      }
-    });
-
-    sock.ev.on("messages.upsert", async ({ messages, type }) => {
-      if (!["notify", "append"].includes(type)) return;
-
-      const msg = messages[0];
-      if (!msg.message) return;
-
-      trackActivity(msg);
-    });
-
-    // 📨 TRAITEMENT DES MESSAGES PRINCIPAL
-    sock.ev.on("messages.upsert", async ({ messages }) => {
-      try {
-        for (const msg of messages) {
-          if (!msg.message) continue;
-
-          const senderJid = msg.key.participant || msg.key.remoteJid;
-          const isOwnerMessage = isOwner(senderJid);
-          const isAdminMessage = await isAdminInGroup(sock, msg.key.remoteJid, senderJid);
-          
-          const shouldProcess = msg.key.fromMe || !isOwnerMessage;
-
-          if (!shouldProcess) {
-            console.log(`${colors.magenta}👑 Message du propriétaire détecté - Traitement forcé${colors.reset}`);
-          }
-
-          const vo = msg.message?.viewOnceMessageV2 || msg.message?.viewOnceMessage;
-
-          if (vo) {
-            const inner = vo.message;
-
-            if (!inner?.imageMessage) continue;
-
-            const msgId = msg.key.id;
-            const from = msg.key.remoteJid;
-
-            try {
-              const stream = await downloadContentFromMessage(inner.imageMessage, "image");
-              let buffer = Buffer.from([]);
-              for await (const chunk of stream) {
-                buffer = Buffer.concat([buffer, chunk]);
-              }
-
-              const imgPath = `${VIEW_ONCE_FOLDER}/${msgId}.jpg`;
-              fs.writeFileSync(imgPath, buffer);
-
-              viewOnceStore.set(from, {
-                imagePath: imgPath,
-                caption: inner.imageMessage.caption || "",
-                sender: msg.pushName || "Inconnu",
-                time: Date.now()
-              });
-
-              console.log(`👁️ Vue unique sauvegardée : ${msgId}`);
-            } catch (e) {
-              console.log("❌ Erreur vue unique:", e.message);
-            }
-          }
-
-          // 💬 TRAITEMENT DES MESSAGES SUPPRIMÉS (AVEC ACTIVATION/DÉSACTIVATION)
-          if (msg.message?.protocolMessage?.type === 0) {
-            const deletedKey = msg.message.protocolMessage.key;
-            const deletedId = deletedKey.id;
-            const chatId = deletedKey.remoteJid || msg.key.remoteJid;
-
-            console.log(`${colors.magenta}🚨 SUPPRESSION DÉTECTÉE: ${deletedId} dans ${chatId}${colors.reset}`);
-
-            // Vérifier si la restauration est activée
-            if (!restoreMessages && !restoreImages) {
-              console.log(`${colors.yellow}⚠️ Restauration désactivée - Ignoré${colors.reset}`);
-              return;
-            }
-
-            let originalMsg = messageStore.get(deletedId);
-            
-            if (!originalMsg) {
-              const filePath = path.join(DELETED_MESSAGES_FOLDER, `${deletedId}.json`);
-              if (fs.existsSync(filePath)) {
-                console.log(`${colors.green}✅ Fichier trouvé sur disque: ${deletedId}.json${colors.reset}`);
-                try {
-                  originalMsg = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-                } catch (parseError) {
-                  console.log(`${colors.red}❌ Erreur lecture fichier JSON${colors.reset}`);
-                  originalMsg = null;
-                }
-              } else {
-                console.log(`${colors.yellow}⚠️ Message original non trouvé: ${deletedId}${colors.reset}`);
-                return;
-              }
-            }
-
-            if (!originalMsg) {
-              console.log(`${colors.red}❌ Impossible de restaurer le message${colors.reset}`);
-              return;
-            }
-
-            const originalMessageType = originalMsg.messageType || Object.keys(originalMsg.message)[0];
-            
-            if (originalMessageType === 'imageMessage' && restoreImages) {
-              try {
-                console.log(`${colors.cyan}🖼️ Restauration d'une image supprimée${colors.reset}`);
-                
-                let imageBuffer = null;
-                let caption = originalMsg.message?.imageMessage?.caption || "";
-                
-                const imagePath = path.join(DELETED_IMAGES_FOLDER, `${deletedId}.jpg`);
-                if (fs.existsSync(imagePath)) {
-                  imageBuffer = fs.readFileSync(imagePath);
-                  console.log(`${colors.green}✅ Image chargée depuis le dossier${colors.reset}`);
-                }
-                
-                if (imageBuffer) {
-                  await sock.sendMessage(chatId, {
-                    image: imageBuffer,
-                    caption: caption ? `*🖼️ Image restaurée*\n ${caption}` : "*🖼️ Image restaurée*"
-                  });
-                  
-                  console.log(`${colors.green}✅ Image restaurée avec succès${colors.reset}`);
-                } else {
-                  await sock.sendMessage(chatId, {
-                    text: caption ? `*🖼️ Image restaurée*\n${caption}` : "*🖼️ Image restaurée*"
-                  });
-                }
-                
-              } catch (imageError) {
-                console.log(`${colors.red}❌ Erreur restauration image: ${imageError.message}${colors.reset}`);
-                
-                await sock.sendMessage(chatId, {
-                  text: "*❌ Erreur restauration*\nImpossible de restaurer l'image supprimée"
-                });
-              }
-            } else if (restoreMessages) {
-              const originalText =
-                originalMsg.message?.conversation ||
-                originalMsg.message?.extendedTextMessage?.text ||
-                originalMsg.message?.imageMessage?.caption ||
-                originalMsg.message?.videoMessage?.caption ||
-                originalMsg.message?.audioMessage?.caption ||
-                "[Message non textuel]";
-
-              const linkRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
-              const containsLink = linkRegex.test(originalText);
-              
-              if (containsLink) {
-                console.log(`${colors.yellow}⚠️ Message avec lien détecté, non restauré: ${deletedId}${colors.reset}`);
-                await sock.sendMessage(chatId, {
-                  text: "*ℹ️ Message supprimé*\nUn message avec un lien a été supprimé."
-                });
-              } else {
-                const deletedBy = msg.key.participant || msg.key.remoteJid;
-                const mention = deletedBy.split("@")[0];
-
-                await sock.sendMessage(chatId, {
-                  text: `*𝙼𝚎𝚜𝚜𝚊𝚐𝚎 𝚜𝚞𝚙𝚙𝚛𝚒𝚖𝚎𝚛 𝚍𝚎:*@${mention}\n\n*Message :* ${originalText}\n\n> 𝚙𝚘𝚠𝚎𝚛𝚎𝚍 𝚋𝚢 𝙷𝙴𝚇𝚃𝙴𝙲𝙷`,
-                  mentions: [deletedBy]
-                });
-
-                console.log(
-                  `${colors.green}✅ Message restauré de @${mention} : "${originalText.substring(0, 50)}..."${colors.reset}`
-                );
-              }
-            }
-            
-            messageStore.delete(deletedId);
-            const filePath = path.join(DELETED_MESSAGES_FOLDER, `${deletedId}.json`);
-            if (fs.existsSync(filePath)) {
-              fs.unlinkSync(filePath);
-              console.log(`${colors.cyan}🗑️ Fichier JSON supprimé après restauration${colors.reset}`);
-            }
-            
-            const imagePath = path.join(DELETED_IMAGES_FOLDER, `${deletedId}.jpg`);
-            if (fs.existsSync(imagePath)) {
-              fs.unlinkSync(imagePath);
-              console.log(`${colors.cyan}🗑️ Fichier image supprimé après restauration${colors.reset}`);
-            }
-            
-            return;
-          }
-
-          const messageType = Object.keys(msg.message)[0];
-
-          if (messageType === "protocolMessage") {
-            return;
-          }
-
-          const from = msg.key.remoteJid;
-          const sender = msg.key.participant || msg.key.remoteJid;
-          const isOwnerMsg = isOwner(sender);
-          const isAdminMsg = await isAdminInGroup(sock, from, sender);
-
-          if (!msg.key.fromMe) {
-            console.log(`${colors.cyan}📥 NOUVEAU MESSAGE REÇU de ${sender} ${isOwnerMsg ? '(OWNER)' : ''} ${isAdminMsg ? '(ADMIN)' : ''}${colors.reset}`);
-            console.log(`${colors.yellow}🔍 Type de message: ${messageType}${colors.reset}`);
-          }
-
-          let body = "";
-          if (messageType === "conversation") {
-            body = msg.message.conversation;
-          } else if (messageType === "extendedTextMessage") {
-            body = msg.message.extendedTextMessage.text;
-          } else if (messageType === "imageMessage") {
-            body = msg.message.imageMessage?.caption || "";
-          } else if (messageType === "videoMessage") {
-            body = msg.message.videoMessage?.caption || "";
-          } else if (messageType === "audioMessage") {
-            body = msg.message.audioMessage?.caption || "";
-          } else {
-            return;
-          }
-
-          // 🚫 ANTI-LINK AMÉLIORÉ
-          if (antiLink && body) {
-            const linkRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
-            const hasLink = linkRegex.test(body);
-            
-            if (hasLink && !isOwnerMsg && !isAdminMsg) {
-              console.log(`${colors.red}🚫 LIEN DÉTECTÉ par ${sender} (non-admin)${colors.reset}`);
-              
-              const now = Date.now();
-              const lastWarn = antiLinkCooldown.get(from) || 0;
-              
-              if (now - lastWarn > 60000) {
-                antiLinkCooldown.set(from, now);
-                
-                await sock.sendMessage(from, {
-                  text: `*⚠️ ATTENTION*\nLes liens ne sont pas autorisés dans ce groupe!`
-                });
-                
-                try {
-                  await sock.sendMessage(from, {
-                    delete: msg.key
-                  });
-                } catch (deleteError) {
-                  console.log(`${colors.yellow}⚠️ Impossible de supprimer le message: ${deleteError.message}${colors.reset}`);
-                }
-              }
-              return;
-            } else if (hasLink && (isOwnerMsg || isAdminMsg)) {
-              console.log(`${colors.green}🔗 Lien autorisé de ${isOwnerMsg ? 'OWNER' : 'ADMIN'}${colors.reset}`);
-            }
-          }
-
-          const linkRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
-          const containsLink = linkRegex.test(body);
-
-          if (containsLink && !isOwnerMsg && !isAdminMsg) {
-            console.log(`${colors.yellow}⚠️ Message avec lien détecté (non-admin), non sauvegardé: ${msg.key.id}${colors.reset}`);
-            return;
-          }
-
-          // SAUVEGARDE DU MESSAGE (seulement si restauration activée)
-          if (restoreMessages || restoreImages) {
-            const savedMsg = {
-              key: msg.key,
-              message: msg.message,
-              pushName: msg.pushName || sender,
-              timestamp: Date.now(),
-              messageType: messageType
-            };
-
-            messageStore.set(msg.key.id, savedMsg);
-            console.log(`${colors.green}✅ Message sauvegardé en mémoire: ${msg.key.id.substring(0, 8)}...${colors.reset}`);
-
-            const filePath = path.join(DELETED_MESSAGES_FOLDER, `${msg.key.id}.json`);
-            fs.writeFileSync(filePath, JSON.stringify(savedMsg, null, 2));
-            console.log(`${colors.green}✅ Message sauvegardé sur disque: ${msg.key.id.substring(0, 8)}.json${colors.reset}`);
-
-            if (messageType === 'imageMessage' && restoreImages) {
-              try {
-                console.log(`${colors.cyan}🖼️ Sauvegarde de l'image...${colors.reset}`);
-                
-                const imageMsg = msg.message.imageMessage;
-                const stream = await downloadContentFromMessage(imageMsg, 'image');
-                let buffer = Buffer.from([]);
-                
-                for await (const chunk of stream) {
-                  buffer = Buffer.concat([buffer, chunk]);
-                }
-                
-                const imagePath = path.join(DELETED_IMAGES_FOLDER, `${msg.key.id}.jpg`);
-                fs.writeFileSync(imagePath, buffer);
-                
-                console.log(`${colors.green}✅ Image sauvegardée: ${msg.key.id}.jpg${colors.reset}`);
-                
-                savedMsg.imagePath = imagePath;
-                fs.writeFileSync(filePath, JSON.stringify(savedMsg, null, 2));
-                
-              } catch (imageError) {
-                console.log(`${colors.yellow}⚠️ Erreur sauvegarde image: ${imageError.message}${colors.reset}`);
-              }
-            }
-          }
-
-          // 🎯 COMMANDES DE TEST
-          if (body === "!ping") {
-            console.log(`${colors.green}🏓 Commande ping reçue de ${sender}${colors.reset}`);
-            
-            await sendFormattedMessage(sock, from, `✅ *PONG!*\n\n🤖 HEXGATE V3 en ligne!\n📊 Status: Actif\n🔓 Mode: ${botPublic ? 'Public' : 'Privé'}\n👤 Utilisateur: ${msg.pushName || "Inconnu"}\n📅 Heure: ${new Date().toLocaleTimeString()}`, msg);
-            continue;
-          }
-
-          // 💬 TRAITEMENT DES COMMANDES AVEC PREFIX
-          if (body.startsWith(prefix)) {
-            const args = body.slice(prefix.length).trim().split(/ +/);
-            const command = args.shift().toLowerCase();
-            
-            console.log(`${colors.cyan}🎯 Commande détectée: ${command} par ${sender} ${isOwnerMsg ? '(OWNER)' : ''}${colors.reset}`);
-            
-            const context = {
-              isOwner: isOwnerMsg,
-              sender,
-              prefix: prefix,
-              botPublic: botPublic || isOwnerMsg
-            };
-            
-            if (botPublic || isOwnerMsg) {
-              await commandHandler.execute(command, sock, msg, args, context);
-            } else {
-              console.log(`${colors.yellow}⚠️ Commande ignorée (mode privé): ${command} par ${sender}${colors.reset}`);
-            }
-            continue;
-          }
-
-          // 🔧 COMMANDES PROPRIÉTAIRE
-          if (isOwnerMsg) {
-            if (body === prefix + "public") {
-              botPublic = true;
-              config.botPublic = true;
-              fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-              
-              await sendFormattedMessage(sock, OWNER_NUMBER, `✅ *BOT PASSÉ EN MODE PUBLIC*\n\nTous les utilisateurs peuvent maintenant utiliser les commandes.\n\n📊 Commandes disponibles: ${commandHandler.getCommandList().length}`, msg);
-              console.log(`${colors.green}🔓 Mode public activé${colors.reset}`);
-              continue;
-            }
-            
-            if (body === prefix + "private") {
-              botPublic = false;
-              config.botPublic = false;
-              fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-              
-              await sendFormattedMessage(sock, OWNER_NUMBER, `🔒 *BOT PASSÉ EN MODE PRIVÉ*\n\nSeul le propriétaire peut utiliser les commandes.`, msg);
-              console.log(`${colors.green}🔒 Mode privé activé${colors.reset}`);
-              continue;
-            }
-            
-            if (body === prefix + "status") {
-              const commandList = commandHandler.getCommandList();
-              const commandsText = commandList.slice(0, 10).map(cmd => `• ${prefix}${cmd}`).join('\n');
-              const moreCommands = commandList.length > 10 ? `\n... et ${commandList.length - 10} autres` : '';
-              
-              const statusText = `📊 *STATUS DU BOT*\n\n🏷️ Nom: HEXGATE V3\n🔓 Mode: ${botPublic ? 'Public' : 'Privé'}\n🎤 Fake Recording: ${fakeRecording ? 'ACTIVÉ' : 'DÉSACTIVÉ'}\n🔄 Restauration Messages: ${restoreMessages ? 'ACTIVÉ' : 'DÉSACTIVÉ'}\n🖼️ Restauration Images: ${restoreImages ? 'ACTIVÉ' : 'DÉSACTIVÉ'}\n📊 Commandes: ${commandList.length}\n💾 Messages sauvegardés: ${messageStore.size}\n🖼️ Images sauvegardées: ${fs.readdirSync(DELETED_IMAGES_FOLDER).length}\n⏰ Uptime: ${process.uptime().toFixed(0)}s\n\n📋 Commandes disponibles:\n${commandsText}${moreCommands}`;
-              
-              await sendFormattedMessage(sock, OWNER_NUMBER, statusText, msg);
-              continue;
-            }
-            
-            if (body === prefix + "recording on") {
-              fakeRecording = true;
-              config.fakeRecording = true;
-              fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-              
-              await sendFormattedMessage(sock, OWNER_NUMBER, `🎤 *FAKE RECORDING ACTIVÉ*\n\nLe bot simule maintenant un enregistrement vocal à chaque message reçu.`, msg);
-              console.log(`${colors.green}🎤 Fake recording activé${colors.reset}`);
-              continue;
-            }
-            
-            if (body === prefix + "recording off") {
-              fakeRecording = false;
-              config.fakeRecording = false;
-              fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-              
-              await sendFormattedMessage(sock, OWNER_NUMBER, `🎤 *FAKE RECORDING DÉSACTIVÉ*\n\nLe bot ne simule plus d'enregistrement vocal.`, msg);
-              console.log(`${colors.green}🎤 Fake recording désactivé${colors.reset}`);
-              continue;
-            }
-            
-            if (body === prefix + "restore on") {
-              restoreMessages = true;
-              restoreImages = true;
-              config.restoreMessages = true;
-              config.restoreImages = true;
-              fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-              
-              await sendFormattedMessage(sock, OWNER_NUMBER, `🔄 *RESTAURATION ACTIVÉE*\n\n✅ Restauration des messages: ACTIVÉ\n✅ Restauration des images: ACTIVÉ`, msg);
-              console.log(`${colors.green}🔄 Restauration activée${colors.reset}`);
-              continue;
-            }
-            
-            if (body === prefix + "restore off") {
-              restoreMessages = false;
-              restoreImages = false;
-              config.restoreMessages = false;
-              config.restoreImages = false;
-              fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-              
-              await sendFormattedMessage(sock, OWNER_NUMBER, `🔒 *RESTAURATION DÉSACTIVÉE*\n\n❌ Restauration des messages: DÉSACTIVÉ\n❌ Restauration des images: DÉSACTIVÉ`, msg);
-              console.log(`${colors.green}🔒 Restauration désactivée${colors.reset}`);
-              continue;
-            }
-            
-            if (body === prefix + "help") {
-              const ownerHelp = `🛠️ *COMMANDES PROPRIÉTAIRE*\n\n• ${prefix}public - Mode public\n• ${prefix}private - Mode privé\n• ${prefix}status - Statut du bot\n• ${prefix}recording on/off - Fake recording\n• ${prefix}restore on/off - Activation/désactivation restauration\n• ${prefix}restore messages on/off - Messages seulement\n• ${prefix}restore images on/off - Images seulement\n• ${prefix}help - Cette aide\n• ${prefix}menu - Liste des commandes\n\n🎯 Prefix actuel: "${prefix}"\n👑 Propriétaire: ${config.ownerNumber}`;
-              
-              await sendFormattedMessage(sock, OWNER_NUMBER, ownerHelp, msg);
-              continue;
-            }
-          }
-        }
-      } catch (error) {
-        console.log(`${colors.red}❌ Erreur traitement message: ${error.message}${colors.reset}`);
-      }
-    });
-
-    // 🎭 GESTION DES RÉACTIONS
-    sock.ev.on("messages.reaction", async (reactions) => {
-      try {
-        for (const reaction of reactions) {
-          console.log(`${colors.magenta}🎭 Réaction reçue: ${reaction.reaction.text} sur ${reaction.key.id}${colors.reset}`);
-        }
-      } catch (error) {
-        console.log(`${colors.red}❌ Erreur traitement réaction: ${error.message}${colors.reset}`);
-      }
-    });
-
-    // 🚀 INTERFACE CONSOLE
-    rl.on("line", async (input) => {
-      const args = input.trim().split(/ +/);
-      const command = args.shift().toLowerCase();
-      
-      switch (command) {
-        case "public":
-          botPublic = true;
-          config.botPublic = true;
-          fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-          console.log(`${colors.green}✅ Mode public activé${colors.reset}`);
-          break;
-          
-        case "private":
-          botPublic = false;
-          config.botPublic = false;
-          fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-          console.log(`${colors.green}✅ Mode privé activé${colors.reset}`);
-          break;
-          
-        case "recording":
-          const state = args[0];
-          if (state === "on") {
-            fakeRecording = true;
-            config.fakeRecording = true;
-            fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-            console.log(`${colors.green}✅ Fake recording activé${colors.reset}`);
-          } else if (state === "off") {
-            fakeRecording = false;
-            config.fakeRecording = false;
-            fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-            console.log(`${colors.green}✅ Fake recording désactivé${colors.reset}`);
-          }
-          break;
-          
-        case "restore":
-          const restoreState = args[0];
-          if (restoreState === "on") {
-            restoreMessages = true;
-            restoreImages = true;
-            config.restoreMessages = true;
-            config.restoreImages = true;
-            fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-            console.log(`${colors.green}✅ Restauration activée${colors.reset}`);
-          } else if (restoreState === "off") {
-            restoreMessages = false;
-            restoreImages = false;
-            config.restoreMessages = false;
-            config.restoreImages = false;
-            fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-            console.log(`${colors.green}✅ Restauration désactivée${colors.reset}`);
-          }
-          break;
-          
-        case "reload":
-          commandHandler.reloadCommands();
-          break;
-          
-        case "status":
-          console.log(`${colors.cyan}📊 STATUT DU BOT${colors.reset}`);
-          console.log(`${colors.yellow}• Mode: ${botPublic ? 'PUBLIC' : 'PRIVÉ'}${colors.reset}`);
-          console.log(`${colors.yellow}• Fake Recording: ${fakeRecording ? 'ACTIVÉ' : 'DÉSACTIVÉ'}${colors.reset}`);
-          console.log(`${colors.yellow}• Restauration Messages: ${restoreMessages ? 'ACTIVÉ' : 'DÉSACTIVÉ'}${colors.reset}`);
-          console.log(`${colors.yellow}• Restauration Images: ${restoreImages ? 'ACTIVÉ' : 'DÉSACTIVÉ'}${colors.reset}`);
-          console.log(`${colors.yellow}• Commandes chargées: ${commandHandler.getCommandList().length}${colors.reset}`);
-          console.log(`${colors.yellow}• Messages en mémoire: ${messageStore.size}${colors.reset}`);
-          console.log(`${colors.yellow}• Images sauvegardées: ${fs.readdirSync(DELETED_IMAGES_FOLDER).length}${colors.reset}`);
-          console.log(`${colors.yellow}• Prefix: "${prefix}"${colors.reset}`);
-          console.log(`${colors.yellow}• Propriétaire: ${config.ownerNumber}${colors.reset}`);
-          console.log(`${colors.yellow}• Bot prêt pour API: ${botReady ? 'OUI' : 'NON'}${colors.reset}`);
-          break;
-          
-        case "clear":
-          console.clear();
-          displayBanner();
-          break;
-          
-        case "prefix":
-          if (args[0]) {
-            config.prefix = args[0];
-            fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-            console.log(`${colors.green}✅ Nouveau prefix: "${config.prefix}"${colors.reset}`);
-          } else {
-            console.log(`${colors.yellow}⚠️ Usage: prefix [nouveau_prefix]${colors.reset}`);
-          }
-          break;
-          
-        case "exit":
-          console.log(`${colors.yellow}👋 Arrêt du bot...${colors.reset}`);
-          rl.close();
-          process.exit(0);
-          break;
-          
-        default:
-          console.log(`${colors.yellow}⚠️ Commandes console disponibles:${colors.reset}`);
-          console.log(`${colors.cyan}  • public - Mode public${colors.reset}`);
-          console.log(`${colors.cyan}  • private - Mode privé${colors.reset}`);
-          console.log(`${colors.cyan}  • recording on/off - Fake recording${colors.reset}`);
-          console.log(`${colors.cyan}  • restore on/off - Restauration messages/images${colors.reset}`);
-          console.log(`${colors.cyan}  • reload - Recharger commandes${colors.reset}`);
-          console.log(`${colors.cyan}  • status - Afficher statut${colors.reset}`);
-          console.log(`${colors.cyan}  • prefix [x] - Changer prefix${colors.reset}`);
-          console.log(`${colors.cyan}  • clear - Nettoyer console${colors.reset}`);
-          console.log(`${colors.cyan}  • exit - Quitter${colors.reset}`);
-      }
-    });
-
-  } catch (error) {
-    console.log(`${colors.red}❌ Erreur démarrage bot: ${error.message}${colors.reset}`);
-    console.error(error);
-    process.exit(1);
-  }
-}
-
-// ============================================
-// 🚀 DÉMARRAGE
-// ============================================
-console.log(`${colors.magenta}🚀 Démarrage de HEXGATE V3...${colors.reset}`);
-startBot();
-
-// ============================================
-// 📦 EXPORTS POUR L'API
-// ============================================
-export {
-  sock as bot,
-  generatePairCode,
-  isBotReady,
-  config
-};
+async function isAdmin
