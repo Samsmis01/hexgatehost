@@ -526,22 +526,22 @@
             border: 1px solid rgba(16, 185, 129, 0.3);
         }
 
-        .status-pending {
+        .status-pairing {
             background: rgba(245, 158, 11, 0.2);
             color: var(--warning-color);
             border: 1px solid rgba(245, 158, 11, 0.3);
-        }
-
-        .status-error {
-            background: rgba(239, 68, 68, 0.2);
-            color: var(--danger-color);
-            border: 1px solid rgba(239, 68, 68, 0.3);
         }
 
         .status-starting {
             background: rgba(59, 130, 246, 0.2);
             color: var(--info-color);
             border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .status-error {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger-color);
+            border: 1px solid rgba(239, 68, 68, 0.3);
         }
 
         .bot-details {
@@ -1406,6 +1406,10 @@
         let logsSessionId = null;
         let autoRefresh = true;
         let refreshInterval = null;
+        let ws = null;
+        let wsReconnectAttempts = 0;
+        const MAX_RECONNECT_ATTEMPTS = 10;
+        const WS_RECONNECT_DELAY = 3000;
 
         // Fonction pour afficher une notification
         function showToast(type, title, message, duration = 5000) {
@@ -1470,11 +1474,153 @@
             return date.toLocaleString('fr-FR');
         }
 
+        // Connexion WebSocket pour les mises à jour en temps réel
+        function connectWebSocket(sessionId = null) {
+            if (ws) {
+                ws.close();
+            }
+            
+            let wsUrl = `ws://${window.location.host}/ws`;
+            if (sessionId) {
+                wsUrl += `?sessionId=${sessionId}`;
+            }
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                console.log('🔗 WebSocket connecté');
+                wsReconnectAttempts = 0;
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    handleWebSocketMessage(data);
+                } catch (error) {
+                    console.error('Erreur traitement message WebSocket:', error);
+                }
+            };
+            
+            ws.onclose = () => {
+                console.log('🔗 WebSocket déconnecté');
+                
+                // Tentative de reconnexion
+                if (wsReconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                    wsReconnectAttempts++;
+                    console.log(`Tentative de reconnexion ${wsReconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}...`);
+                    setTimeout(() => connectWebSocket(sessionId), WS_RECONNECT_DELAY * wsReconnectAttempts);
+                }
+            };
+            
+            ws.onerror = (error) => {
+                console.error('Erreur WebSocket:', error);
+            };
+        }
+
+        // Gérer les messages WebSocket
+        function handleWebSocketMessage(data) {
+            switch (data.type) {
+                case 'log':
+                    // Ajouter le log à l'interface
+                    if (logsSessionId === data.sessionId) {
+                        addLogToUI(data.data);
+                    }
+                    break;
+                    
+                case 'pairing_code':
+                    // Mettre à jour le code de pairing
+                    if (currentSessionId === data.sessionId) {
+                        document.getElementById('pairingCodeDisplay').textContent = data.pairingCode;
+                        showToast('success', 'Pairing Code', 'Code disponible!');
+                    }
+                    // Mettre à jour la liste des bots
+                    updateBotInList(data.sessionId, { pairingCode: data.pairingCode });
+                    break;
+                    
+                case 'bot_update':
+                    // Mettre à jour l'état du bot dans la liste
+                    updateBotInList(data.sessionId, {
+                        status: data.status,
+                        connectionStatus: data.connectionStatus,
+                        connected: data.connected,
+                        pairingCode: data.pairingCode
+                    });
+                    break;
+                    
+                case 'initial_state':
+                    // Initialiser l'état
+                    console.log('État initial reçu:', data);
+                    break;
+                    
+                case 'pong':
+                    // Réponse au ping
+                    console.log('Pong reçu:', data.timestamp);
+                    break;
+            }
+        }
+
+        // Ajouter un log à l'interface
+        function addLogToUI(logEntry) {
+            const logsContent = document.getElementById('logsContent');
+            if (logsContent) {
+                const time = new Date(logEntry.timestamp).toLocaleTimeString('fr-FR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+                const logElement = document.createElement('div');
+                logElement.style.color = logEntry.type === 'stderr' ? '#ef4444' : 
+                                       logEntry.type === 'error' ? '#f59e0b' : '#94a3b8';
+                logElement.textContent = `[${time}] [${logEntry.type.toUpperCase()}] ${logEntry.message.trim()}`;
+                logsContent.appendChild(logElement);
+                logsContent.scrollTop = logsContent.scrollHeight;
+            }
+        }
+
+        // Mettre à jour un bot dans la liste
+        function updateBotInList(sessionId, updates) {
+            const botCards = document.querySelectorAll('.bot-card');
+            botCards.forEach(card => {
+                const botId = card.querySelector('.bot-id')?.textContent;
+                if (botId && botId.includes(sessionId.substring(0, 12))) {
+                    if (updates.status) {
+                        const statusElement = card.querySelector('.bot-status');
+                        if (statusElement) {
+                            statusElement.textContent = updates.status.toUpperCase();
+                            statusElement.className = 'bot-status status-' + updates.status;
+                        }
+                    }
+                    
+                    if (updates.pairingCode) {
+                        const pairingElement = card.querySelector('.pairing-code-display');
+                        if (pairingElement) {
+                            pairingElement.textContent = updates.pairingCode;
+                        } else {
+                            // Créer l'élément s'il n'existe pas
+                            const detailsDiv = card.querySelector('.bot-details');
+                            if (detailsDiv) {
+                                const pairingDiv = document.createElement('div');
+                                pairingDiv.className = 'pairing-code-display';
+                                pairingDiv.textContent = updates.pairingCode;
+                                pairingDiv.onclick = () => copyToClipboard(updates.pairingCode);
+                                pairingDiv.title = 'Cliquez pour copier';
+                                card.insertBefore(pairingDiv, card.querySelector('.bot-actions'));
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
         // Charger les données initiales
         async function loadDashboard() {
             try {
                 const response = await fetch('/api/status');
                 const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.message || 'Erreur serveur');
+                }
                 
                 // Mettre à jour le statut du serveur
                 const statusBadge = document.getElementById('serverStatus');
@@ -1492,8 +1638,8 @@
                     Math.floor(data.uptime / 60);
                 
                 // Mettre à jour la mémoire
-                if (data.memory) {
-                    document.getElementById('memoryUsage').textContent = data.memory.rss;
+                if (data.memoryUsage) {
+                    document.getElementById('memoryUsage').textContent = data.memoryUsage;
                 }
                 
                 // Mettre à jour l'URL
@@ -1523,6 +1669,10 @@
                 const botsListElement = document.getElementById('botsList');
                 const activeBotsElement = document.getElementById('activeBots');
                 const totalBotsElement = document.getElementById('totalBots');
+                
+                if (!data.success) {
+                    throw new Error(data.message || 'Erreur serveur');
+                }
                 
                 activeBotsElement.textContent = data.activeBots;
                 totalBotsElement.textContent = `${data.totalBots} bots`;
@@ -1555,7 +1705,6 @@
                                     ${bot.status === 'connected' ? 'CONNECTÉ' : 
                                       bot.status === 'running' ? 'EN COURS' : 
                                       bot.status === 'pairing' ? 'PAIRING' :
-                                      bot.status === 'qr_waiting' ? 'QR CODE' :
                                       bot.status === 'starting' ? 'DÉMARRAGE' :
                                       bot.status === 'error' ? 'ERREUR' : bot.status.toUpperCase()}
                                 </span>
@@ -1629,8 +1778,11 @@
                 
                 const data = await response.json();
                 
-                if (data.status === 'success' || data.status === 'exists') {
+                if (data.success || data.status === 'exists') {
                     currentSessionId = data.sessionId;
+                    
+                    // Connecter WebSocket pour cette session
+                    connectWebSocket(data.sessionId);
                     
                     if (data.status === 'exists') {
                         showToast('info', 'Info', 'Un bot existe déjà pour ce numéro');
@@ -1688,7 +1840,6 @@
             sendBtn.disabled = true;
             
             try {
-                // Envoyer le numéro directement au bot via l'API
                 const response = await fetch(`/api/bots/${logsSessionId}/send-phone`, {
                     method: 'POST',
                     headers: {
@@ -1699,7 +1850,7 @@
                 
                 const data = await response.json();
                 
-                if (data.status === 'success') {
+                if (data.success) {
                     statusDiv.className = 'logs-phone-status success';
                     statusDiv.textContent = '✅ Numéro envoyé avec succès!';
                     statusDiv.style.display = 'block';
@@ -1749,7 +1900,7 @@
                 
                 const data = await response.json();
                 
-                if (data.status === 'success') {
+                if (data.success) {
                     showToast('success', 'Succès', 'Bot arrêté avec succès');
                     loadBots();
                 } else {
@@ -1773,7 +1924,7 @@
                     const response = await fetch(`/api/pairing/${sessionId}`);
                     const data = await response.json();
                     
-                    if (data.status === 'success' && data.pairingCode) {
+                    if (data.success && data.pairingCode) {
                         document.getElementById('pairingCodeDisplay').textContent = data.pairingCode;
                         showToast('success', 'Pairing Code', 'Code disponible!');
                         clearInterval(pairingCodeCheckInterval);
@@ -1783,7 +1934,7 @@
                     const statusResponse = await fetch(`/api/bots/${sessionId}/status`);
                     const statusData = await statusResponse.json();
                     
-                    if (statusData.connected) {
+                    if (statusData.success && statusData.connected) {
                         clearInterval(pairingCodeCheckInterval);
                         setTimeout(() => {
                             closeModal();
@@ -1833,8 +1984,19 @@
                 const response = await fetch(`/api/bots/${logsSessionId}/logs`);
                 const data = await response.json();
                 
-                if (data.status === 'success') {
-                    logsContent.innerHTML = data.logs.join('\n') || 'Aucun log disponible';
+                if (data.success) {
+                    // Nettoyer le contenu
+                    logsContent.innerHTML = '';
+                    
+                    // Ajouter chaque log
+                    data.logs.forEach(log => {
+                        const logElement = document.createElement('div');
+                        logElement.textContent = log;
+                        logsContent.appendChild(logElement);
+                    });
+                    
+                    // Faire défiler vers le bas
+                    logsContent.scrollTop = logsContent.scrollHeight;
                 } else {
                     logsContent.innerHTML = 'Erreur lors du chargement des logs';
                 }
@@ -1906,6 +2068,9 @@
 
         // Initialisation
         document.addEventListener('DOMContentLoaded', () => {
+            // Connexion WebSocket globale
+            connectWebSocket();
+            
             // Chargement initial
             loadDashboard();
             
@@ -1946,6 +2111,13 @@
                     }
                 });
             });
+            
+            // Ping régulier pour maintenir la connexion WebSocket
+            setInterval(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
+                }
+            }, 30000);
             
             // Afficher l'URL du serveur dans la console
             console.log('🚀 HexTech Bot Manager démarré');
