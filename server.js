@@ -21,7 +21,7 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// 🔧 Route pour générer un code de pairing
+// 🔧 Route pour générer un code de pairing - CORRIGÉE
 app.post('/api/pair', async (req, res) => {
     try {
         const { phone } = req.body;
@@ -30,9 +30,110 @@ app.post('/api/pair', async (req, res) => {
             return res.status(400).json({ error: 'Numéro requis' });
         }
         
-        // Nettoyer le numéro
+        // Nettoyer le numéro (garder seulement les chiffres)
         const cleanPhone = phone.replace(/\D/g, '');
-        const phoneWithCountry = cleanPhone.startsWith('243') ? cleanPhone : `243${cleanPhone}`;
+        
+        // VÉRIFICATION ET CORRECTION DU NUMÉRO
+        let phoneWithCountry;
+        
+        // Liste des indicatifs pays courants en Afrique (peut être étendue)
+        const countryCodes = [
+            '243', // RD Congo
+            '224', // Guinée
+            '225', // Côte d'Ivoire
+            '226', // Burkina Faso
+            '227', // Niger
+            '228', // Togo
+            '229', // Bénin
+            '230', // Maurice
+            '231', // Liberia
+            '232', // Sierra Leone
+            '233', // Ghana
+            '234', // Nigeria
+            '235', // Tchad
+            '236', // République centrafricaine
+            '237', // Cameroun
+            '238', // Cap-Vert
+            '239', // Sao Tomé-et-Principe
+            '240', // Guinée équatoriale
+            '241', // Gabon
+            '242', // Congo
+            '243', // RD Congo (déjà)
+            '244', // Angola
+            '245', // Guinée-Bissau
+            '246', // Territoire britannique de l'océan Indien
+            '247', // Ascension
+            '248', // Seychelles
+            '249', // Soudan
+            '250', // Rwanda
+            '251', // Éthiopie
+            '252', // Somalie
+            '253', // Djibouti
+            '254', // Kenya
+            '255', // Tanzanie
+            '256', // Ouganda
+            '257', // Burundi
+            '258', // Mozambique
+            '260', // Zambie
+            '261', // Madagascar
+            '262', // Réunion
+            '263', // Zimbabwe
+            '264', // Namibie
+            '265', // Malawi
+            '266', // Lesotho
+            '267', // Botswana
+            '268', // Eswatini
+            '269', // Comores
+            '290', // Sainte-Hélène
+            '291', // Érythrée
+            '297', // Aruba
+            '298', // Îles Féroé
+            '299', // Groenland
+            '211', // Soudan du Sud
+            '212', // Maroc
+            '213', // Algérie
+            '216', // Tunisie
+            '218', // Libye
+            '220', // Gambie
+            '221', // Sénégal
+            '222', // Mauritanie
+            '223'  // Mali
+        ];
+        
+        // Vérifier si le numéro commence déjà par un indicatif pays connu
+        let hasCountryCode = false;
+        let detectedCode = '';
+        
+        for (const code of countryCodes) {
+            if (cleanPhone.startsWith(code)) {
+                hasCountryCode = true;
+                detectedCode = code;
+                break;
+            }
+        }
+        
+        if (hasCountryCode) {
+            // Cas 1: Le numéro a déjà un indicatif pays valide
+            phoneWithCountry = cleanPhone;
+            console.log(`✅ Numéro avec indicatif ${detectedCode} détecté`);
+        } else {
+            // Cas 2: Le numéro n'a pas d'indicatif pays détectable
+            // On vérifie s'il commence par un 0 (numéro local)
+            if (cleanPhone.startsWith('0')) {
+                // Enlever le 0 initial et ajouter 243 (RD Congo) par défaut
+                phoneWithCountry = '243' + cleanPhone.substring(1);
+                console.log(`🔧 Numéro local détecté, ajout indicatif 243`);
+            } else {
+                // Numéro sans 0 initial, on ajoute 243 par défaut
+                phoneWithCountry = '243' + cleanPhone;
+                console.log(`🔧 Aucun indicatif détecté, ajout 243 par défaut`);
+            }
+        }
+        
+        // VÉRIFICATION FINALE de la longueur du numéro
+        if (phoneWithCountry.length < 10 || phoneWithCountry.length > 15) {
+            console.warn(`⚠️ Numéro de longueur suspecte: ${phoneWithCountry} (${phoneWithCountry.length} chiffres)`);
+        }
         
         console.log(`📱 Demande de pair code pour: ${phoneWithCountry}`);
         
@@ -56,10 +157,13 @@ app.post('/api/pair', async (req, res) => {
         }
         
         const logEntry = {
-            phone: phoneWithCountry,
+            originalPhone: phone,
+            cleanPhone: cleanPhone,
+            processedPhone: phoneWithCountry,
             code: pairCode,
             timestamp: new Date().toISOString(),
-            ip: req.ip
+            ip: req.ip,
+            countryCode: detectedCode || '243 (défaut)'
         };
         
         fs.appendFileSync(
@@ -69,8 +173,10 @@ app.post('/api/pair', async (req, res) => {
         
         res.json({
             success: true,
+            original: phone,
             phone: phoneWithCountry,
             code: pairCode,
+            countryCode: detectedCode || '243',
             instructions: '1. Ouvrez WhatsApp sur votre téléphone\n2. Allez dans Paramètres > Périphériques liés > Lier un périphérique\n3. Scannez le QR code ou entrez le code'
         });
         
