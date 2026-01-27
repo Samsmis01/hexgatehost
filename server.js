@@ -1,7 +1,12 @@
-const express = require('express');
-const { exec } = require('child_process');
-const fs = require('fs');
-const path = require('path');
+import express from 'express';
+import { exec } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Définir __dirname pour ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -31,8 +36,8 @@ app.post('/api/pair', async (req, res) => {
         
         console.log(`📱 Demande de pair code pour: ${phoneWithCountry}`);
         
-        // Charger le module de bot pour générer le pair code
-        const { generatePairCode, isBotReady } = require('./index');
+        // Importer dynamiquement le module du bot
+        const { generatePairCode, isBotReady } = await import('./index.js');
         
         if (!isBotReady()) {
             return res.status(503).json({ error: 'Bot non prêt, veuillez patienter...' });
@@ -76,15 +81,21 @@ app.post('/api/pair', async (req, res) => {
 });
 
 // 📊 Route de statut
-app.get('/api/status', (req, res) => {
+app.get('/api/status', async (req, res) => {
     try {
-        const { isBotReady } = require('./index');
-        const config = require('./config.json');
+        const { isBotReady } = await import('./index.js');
+        
+        // Lire config.json
+        const configPath = path.join(__dirname, 'config.json');
+        let config = {};
+        if (fs.existsSync(configPath)) {
+            config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        }
         
         res.json({
             botReady: isBotReady(),
-            owner: config.ownerNumber,
-            prefix: config.prefix,
+            owner: config.ownerNumber || 'Non configuré',
+            prefix: config.prefix || '.',
             mode: config.botPublic ? 'Public' : 'Privé',
             timestamp: new Date().toISOString()
         });
@@ -177,5 +188,7 @@ app.listen(PORT, () => {
     
     // Démarrer le bot automatiquement
     console.log('🤖 Démarrage du bot WhatsApp...');
-    require('./index');
+    import('./index.js').catch(error => {
+        console.error('❌ Erreur démarrage bot:', error);
+    });
 });
