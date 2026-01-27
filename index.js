@@ -173,7 +173,7 @@ if (missingModules.length > 0) {
       import('./index.js');
     }, 3000);
     
-    return;
+    // ⚠️ CORRECTION : NE PAS UTILISER "return" ICI
     
   } catch (error) {
     console.log('❌ Erreur installation automatique:', error.message);
@@ -195,7 +195,6 @@ if (missingModules.length > 0) {
       process.exit(1);
     });
     
-    return;
   }
 }
 
