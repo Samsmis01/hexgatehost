@@ -128,14 +128,15 @@ app.post('/api/generate-code', (req, res) => {
         }
         
         // Code d'installation simple
-        const installationCode = `
-// 🔧 CODE D'INSTALLATION HEXGATE V3
+        const cleanedPhone = phone.replace(/\D/g, '');
+        
+        const installationCode = `// 🔧 CODE D'INSTALLATION HEXGATE V3
 // 📱 Pour le numéro: ${phone}
 
 const fs = require('fs');
 const config = {
     prefix: ".",
-    ownerNumber: "${phone.replace(\\D/g, '')}",
+    ownerNumber: "${cleanedPhone}",
     botPublic: true,
     fakeRecording: false,
     antiLink: true,
@@ -155,8 +156,7 @@ console.log('✅ Configuration créée pour ${phone}');
 // 3. Suivez les instructions dans le terminal
 
 // 💡 Le bot vous demandera de saisir le code de pairing
-// 💡 Utilisez le code obtenu sur le site web
-        `;
+// 💡 Utilisez le code obtenu sur le site web`;
         
         res.json({
             success: true,
