@@ -205,58 +205,6 @@ const readline = require("readline");
 const { exec } = require("child_process");
 const { Buffer } = require("buffer");
 
-// Fonction pour vérifier si un expéditeur est propriétaire
-function isOwner(senderJid) {
-    const normalizedJid = senderJid.split(":")[0];
-    const ownerJid = OWNER_NUMBER.split(":")[0];
-    return normalizedJid === ownerJid;
-}
-
-// ⚡ VARIABLES POUR L'API (Nouveau)
-let sock = null;
-let botReady = false;
-let pairingCodes = new Map();
-
-// 📋 FONCTIONS POUR L'API
-function isBotReady() {
-  return botReady;
-}
-
-async function generatePairCode(phone) {
-  try {
-    if (!sock) {
-      console.log('❌ Bot non initialisé pour générer pair code');
-      return null;
-    }
-    
-    const cleanPhone = phone.replace(/\D/g, '');
-    const phoneWithCountry = cleanPhone.startsWith('243') ? cleanPhone : `243${cleanPhone}`;
-    
-    console.log(`📱 Génération pair code pour: ${phoneWithCountry}`);
-    
-    const code = await sock.requestPairingCode(phoneWithCountry);
-    
-    if (code) {
-      pairingCodes.set(phoneWithCountry, {
-        code: code,
-        timestamp: Date.now()
-      });
-      
-      setTimeout(() => {
-        pairingCodes.delete(phoneWithCountry);
-      }, 300000);
-      
-      console.log(`✅ Pair code généré: ${code} pour ${phoneWithCountry}`);
-      return code;
-    }
-    
-    return null;
-  } catch (error) {
-    console.log(`❌ Erreur génération pair code: ${error.message}`);
-    return null;
-  }
-}
-
 // 🌈 COULEURS POUR LE TERMINAL
 const colors = {
   reset: '\x1b[0m',
@@ -298,12 +246,91 @@ let lastDeletedMessage = new Map();
 let antiLinkCooldown = new Map();
 let botMessages = new Set();
 let autoReact = true;
+let antiLinkEnabled = true;
+let deleteRestoreEnabled = true;
+let imageSaveEnabled = true;
+let welcomeEnabledConfig = false;
 
 // Map pour stocker les messages en mémoire
 const messageStore = new Map();
 
 // Map pour stocker les vues uniques
 const viewOnceStore = new Map();
+
+// ⚡ VARIABLES POUR L'API (Nouveau)
+let sock = null;
+let botReady = false;
+let pairingCodes = new Map();
+
+// ============================================
+// 🔧 FONCTIONS UTILITAIRES
+// ============================================
+
+// Fonction pour vérifier si un expéditeur est propriétaire
+function isOwner(senderJid) {
+    const normalizedJid = senderJid.split(":")[0];
+    const ownerJid = OWNER_NUMBER.split(":")[0];
+    return normalizedJid === ownerJid;
+}
+
+// Fonction pour vérifier si un expéditeur est admin dans un groupe
+async function isAdminInGroup(sock, jid, senderJid) {
+  try {
+    if (!jid.endsWith("@g.us")) return false;
+    
+    const metadata = await sock.groupMetadata(jid);
+    const participant = metadata.participants.find(p => p.id === senderJid);
+    
+    if (!participant) return false;
+    
+    return participant.admin === "admin" || participant.admin === "superadmin";
+  } catch (error) {
+    console.log(`${colors.yellow}⚠️ Erreur vérification admin: ${error.message}${colors.reset}`);
+    return false;
+  }
+}
+
+// ============================================
+// 📋 FONCTIONS POUR L'API
+// ============================================
+function isBotReady() {
+  return botReady;
+}
+
+async function generatePairCode(phone) {
+  try {
+    if (!sock) {
+      console.log('❌ Bot non initialisé pour générer pair code');
+      return null;
+    }
+    
+    const cleanPhone = phone.replace(/\D/g, '');
+    const phoneWithCountry = cleanPhone.startsWith('243') ? cleanPhone : `243${cleanPhone}`;
+    
+    console.log(`📱 Génération pair code pour: ${phoneWithCountry}`);
+    
+    const code = await sock.requestPairingCode(phoneWithCountry);
+    
+    if (code) {
+      pairingCodes.set(phoneWithCountry, {
+        code: code,
+        timestamp: Date.now()
+      });
+      
+      setTimeout(() => {
+        pairingCodes.delete(phoneWithCountry);
+      }, 300000);
+      
+      console.log(`✅ Pair code généré: ${code} pour ${phoneWithCountry}`);
+      return code;
+    }
+    
+    return null;
+  } catch (error) {
+    console.log(`❌ Erreur génération pair code: ${error.message}`);
+    return null;
+  }
+}
 
 // ============================================
 // 🖼️ FONCTION DE FORMATAGE UNIFIÉE POUR TOUS LES MESSAGES
@@ -480,15 +507,6 @@ class CommandHandler {
   loadBuiltinCommands() {
     const self = this;
     
-    // ============================================
-    // 🚫 COMMANDES SUPPRIMÉES : 
-    // - quiz (toutes les variantes)
-    // - hack
-    // - ping
-    // - vv
-    // - ascii
-    // ============================================
-    
     // Commande setname
     this.commands.set("setname", {
       name: "setname",
@@ -663,14 +681,14 @@ class CommandHandler {
 
         try {
           if (args[0] === "on") {
-            welcomeEnabled = true;
+            welcomeEnabledConfig = true;
             return await sock.sendMessage(from, { text: "✅ Messages de bienvenue activés" });
           } else if (args[0] === "off") {
-            welcomeEnabled = false;
+            welcomeEnabledConfig = false;
             return await sock.sendMessage(from, { text: "❌ Messages de bienvenue désactivés" });
           }
 
-          if (!welcomeEnabled) {
+          if (!welcomeEnabledConfig) {
             return await sock.sendMessage(from, {
               text: "❌ La fonctionnalité de bienvenue est désactivée. Tapez `.welcome on` pour l'activer."
             });
@@ -1206,28 +1224,6 @@ class CommandHandler {
   }
 }
 
-// Variables de contrôle pour les fonctionnalités
-let antiLinkEnabled = true;
-let deleteRestoreEnabled = true;
-let imageSaveEnabled = true;
-
-// Fonction pour vérifier si un expéditeur est admin dans un groupe
-async function isAdminInGroup(sock, jid, senderJid) {
-  try {
-    if (!jid.endsWith("@g.us")) return false;
-    
-    const metadata = await sock.groupMetadata(jid);
-    const participant = metadata.participants.find(p => p.id === senderJid);
-    
-    if (!participant) return false;
-    
-    return participant.admin === "admin" || participant.admin === "superadmin";
-  } catch (error) {
-    console.log(`${colors.yellow}⚠️ Erreur vérification admin: ${error.message}${colors.reset}`);
-    return false;
-  }
-}
-
 // 📱 Affichage logo
 function displayBanner() {
   console.clear();
@@ -1389,7 +1385,7 @@ ${colors.reset}`, (phone) => {
     // Auto welcome
     sock.ev.on("group-participants.update", async (update) => {
       try {
-        if (!welcomeEnabled) return;
+        if (!welcomeEnabledConfig) return;
         if (update.action !== "add") return;
 
         const groupJid = update.id;
@@ -1725,10 +1721,6 @@ ${colors.reset}`, (phone) => {
 
                 // 🔧 COMMANDES PROPRIÉTAIRE
                 if (isOwnerMsg) {
-                    // ============================================
-                    // COMMANDES ON/OFF POUR LES FONCTIONNALITÉS
-                    // ============================================
-                    
                     if (body === prefix + "antilink on") {
                         antiLinkEnabled = true;
                         await sock.sendMessage(msg.key.remoteJid, { 
@@ -1792,10 +1784,6 @@ ${colors.reset}`, (phone) => {
                         continue;
                     }
                     
-                    // ============================================
-                    // AUTRES COMMANDES PROPRIÉTAIRE
-                    // ============================================
-                    
                     if (body === prefix + "public") {
                         botPublic = true;
                         config.botPublic = true;
@@ -1826,14 +1814,12 @@ ${colors.reset}`, (phone) => {
                     }
                     
                     if (body === prefix + "recording on") {
-                        // Commenté car fakerecording est supprimé
                         await sock.sendMessage(OWNER_NUMBER, `🎤 *FAKE RECORDING NON DISPONIBLE*\n\nCette fonctionnalité a été supprimée.`);
                         console.log(`${colors.yellow}⚠️ Fake recording désactivé (supprimé)${colors.reset}`);
                         continue;
                     }
                     
                     if (body === prefix + "recording off") {
-                        // Commenté car fakerecording est supprimé
                         await sock.sendMessage(OWNER_NUMBER, `🎤 *FAKE RECORDING NON DISPONIBLE*\n\nCette fonctionnalité a été supprimée.`);
                         console.log(`${colors.yellow}⚠️ Fake recording désactivé (supprimé)${colors.reset}`);
                         continue;
@@ -1958,5 +1944,6 @@ module.exports = {
   bot: sock,
   generatePairCode,
   isBotReady,
-  config
+  config,
+  isOwner
 };
