@@ -309,7 +309,7 @@ const messageStore = new Map();
 const viewOnceStore = new Map();
 
 // ============================================
-// 🖼️ FONCTION DE FORMATAGE UNIFIÉE POUR TOUS LES MESSAGES - CORRIGÉE
+// 🖼️ FONCTION DE FORMATAGE UNIFIÉE POUR TOUS LES MESSAGES - CORRIGÉE DÉFINITIVEMENT
 // ============================================
 async function sendFormattedMessage(sock, jid, messageText, msgObject = null) {
   const pushName = msgObject?.pushName || 'Inconnu';
@@ -348,6 +348,7 @@ async function sendFormattedMessage(sock, jid, messageText, msgObject = null) {
     console.log(`${colors.yellow}⚠️ Erreur avec l'image: ${imageError.message}${colors.reset}`);
     
     const alternativeImage = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTyERDdGHGjmXPv_6tCBIChmD-svWkJatQlpzfxY5WqFg&s";
+    
     try {
       const sentMsg = await sock.sendMessage(jid, {
         image: { url: alternativeImage },
@@ -358,20 +359,24 @@ async function sendFormattedMessage(sock, jid, messageText, msgObject = null) {
         botMessages.add(sentMsg.key.id);
         setTimeout(() => botMessages.delete(sentMsg.key.id), 300000);
       }
+      return;
     } catch (secondImageError) {
       console.log(`${colors.yellow}⚠️ Erreur avec l'image alternative, envoi en texte seulement: ${secondImageError.message}${colors.reset}`);
-      
-      const sentMsg = await sock.sendMessage(jid, { 
-        text: formattedMessage 
-      });
-      
-      if (sentMsg?.key?.id) {
-        botMessages.add(sentMsg.key.id);
-        setTimeout(() => botMessages.delete(sentMsg.key.id), 300000);
-      }
     }
-  } catch (finalError) {
-    console.log(`${colors.red}❌ Échec complet de l'envoi du message: ${finalError.message}${colors.reset}`);
+  }
+  
+  // Si on arrive ici, c'est qu'on n'a pas pu envoyer avec image
+  try {
+    const sentMsg = await sock.sendMessage(jid, { 
+      text: formattedMessage 
+    });
+    
+    if (sentMsg?.key?.id) {
+      botMessages.add(sentMsg.key.id);
+      setTimeout(() => botMessages.delete(sentMsg.key.id), 300000);
+    }
+  } catch (textError) {
+    console.log(`${colors.red}❌ Échec complet de l'envoi du message: ${textError.message}${colors.reset}`);
   }
 }
 
