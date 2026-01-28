@@ -16,9 +16,6 @@ const missingModules = [];
 // 📁 CHARGEMENT DE LA CONFIGURATION
 let config = {};
 try {
-  // Déclarer fs ici pour l'utiliser avant le require
-  const fs = require('fs');
-  
   if (fs.existsSync('./config.json')) {
     config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
     console.log('✅ Configuration chargée depuis config.json');
@@ -309,15 +306,13 @@ const messageStore = new Map();
 const viewOnceStore = new Map();
 
 // ============================================
-// 🖼️ FONCTION DE FORMATAGE UNIFIÉE POUR TOUS LES MESSAGES - CORRIGÉE DÉFINITIVEMENT
+// 🖼️ FONCTION DE FORMATAGE UNIFIÉE POUR TOUS LES MESSAGES
 // ============================================
-async function sendFormattedMessage(sock, jid, messageText, msgObject = null) {
-  const pushName = msgObject?.pushName || 'Inconnu';
-  
+async function sendFormattedMessage(sock, jid, messageText, senderName = 'Inconnu') {
   const formattedMessage = `┏━━❖ ＡＲＣＡＮＥ❖━━┓
 ┃ 🛡️ 𝐇𝐄𝐗✦𝐆Ａ𝐓Ｅ 𝑽_1
 ┃
-┃ 👨‍💻 𝙳𝙴𝚅 : ${pushName}
+┃ 👨‍💻 𝙳𝙴𝚅 : ${senderName}
 ┗━━━━━━━━━━━━━━━┛
 
 ┏━━【𝙷𝙴𝚇𝙶𝙰𝚃𝙴_𝐕1】━━┓
@@ -347,8 +342,8 @@ async function sendFormattedMessage(sock, jid, messageText, msgObject = null) {
   } catch (imageError) {
     console.log(`${colors.yellow}⚠️ Erreur avec l'image: ${imageError.message}${colors.reset}`);
     
+    // ESSAYER UNE IMAGE ALTERNATIVE
     const alternativeImage = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTyERDdGHGjmXPv_6tCBIChmD-svWkJatQlpzfxY5WqFg&s";
-    
     try {
       const sentMsg = await sock.sendMessage(jid, {
         image: { url: alternativeImage },
@@ -359,24 +354,19 @@ async function sendFormattedMessage(sock, jid, messageText, msgObject = null) {
         botMessages.add(sentMsg.key.id);
         setTimeout(() => botMessages.delete(sentMsg.key.id), 300000);
       }
-      return;
     } catch (secondImageError) {
       console.log(`${colors.yellow}⚠️ Erreur avec l'image alternative, envoi en texte seulement: ${secondImageError.message}${colors.reset}`);
+      
+      // ESSAYER EN TEXTE SEULEMENT
+      const sentMsg = await sock.sendMessage(jid, { 
+        text: formattedMessage 
+      });
+      
+      if (sentMsg?.key?.id) {
+        botMessages.add(sentMsg.key.id);
+        setTimeout(() => botMessages.delete(sentMsg.key.id), 300000);
+      }
     }
-  }
-  
-  // Si on arrive ici, c'est qu'on n'a pas pu envoyer avec image
-  try {
-    const sentMsg = await sock.sendMessage(jid, { 
-      text: formattedMessage 
-    });
-    
-    if (sentMsg?.key?.id) {
-      botMessages.add(sentMsg.key.id);
-      setTimeout(() => botMessages.delete(sentMsg.key.id), 300000);
-    }
-  } catch (textError) {
-    console.log(`${colors.red}❌ Échec complet de l'envoi du message: ${textError.message}${colors.reset}`);
   }
 }
 
@@ -825,7 +815,7 @@ class CommandHandler {
       execute: async (sock, msg, args, context) => {
         const from = msg.key.remoteJid;
 
-        await sendFormattedMessage(sock, from, "♻️ *Mise à jour en cours...*\n\n• Rechargement des commandes\n• Nettoyage de la mémoire\n• Redémarrage du bot\n\n⏳ Veuillez patienter...", msg);
+        await sendFormattedMessage(sock, from, "♻️ *Mise à jour en cours...*\n\n• Rechargement des commandes\n• Nettoyage de la mémoire\n• Redémarrage du bot\n\n⏳ Veuillez patienter...");
 
         await new Promise(r => setTimeout(r, 2000));
 
@@ -847,7 +837,7 @@ class CommandHandler {
         const from = msg.key.remoteJid;
 
         if (!from.endsWith("@g.us")) {
-          await sendFormattedMessage(sock, from, "❌ Commande utilisable uniquement dans un groupe", msg);
+          await sendFormattedMessage(sock, from, "❌ Commande utilisable uniquement dans un groupe");
           return;
         }
 
@@ -855,7 +845,7 @@ class CommandHandler {
         const participants = metadata.participants || [];
 
         if (!args[0]) {
-          await sendFormattedMessage(sock, from, "❌ Usage: .tag [texte]", msg);
+          await sendFormattedMessage(sock, from, "❌ Usage: .tag [texte]");
           return;
         }
 
@@ -868,7 +858,7 @@ class CommandHandler {
             mentions: mentions
           });
         } catch (error) {
-          await sendFormattedMessage(sock, from, `❌ Erreur lors du tag: ${error.message}`, msg);
+          await sendFormattedMessage(sock, from, `❌ Erreur lors du tag: ${error.message}`);
         }
       }
     });
@@ -884,8 +874,7 @@ class CommandHandler {
           return await sendFormattedMessage(
             sock,
             from,
-            "❌ Usage : .fakecall @user\n\nExemple : .fakecall @243xxxxxxxx",
-            msg
+            "❌ Usage : .fakecall @user\n\nExemple : .fakecall @243xxxxxxxx"
           );
         }
 
@@ -929,7 +918,7 @@ class CommandHandler {
 
         } catch (err) {
           console.log("fakecall error:", err);
-          await sendFormattedMessage(sock, from, "❌ Erreur fakecall", msg);
+          await sendFormattedMessage(sock, from, "❌ Erreur fakecall");
         }
       }
     });
@@ -942,7 +931,7 @@ class CommandHandler {
         const from = msg.key.remoteJid;
 
         if (!from.endsWith("@g.us")) {
-          return await sendFormattedMessage(sock, from, "❌ Cette commande fonctionne uniquement dans les groupes", msg);
+          return await sendFormattedMessage(sock, from, "❌ Cette commande fonctionne uniquement dans les groupes");
         }
 
         try {
@@ -951,7 +940,7 @@ class CommandHandler {
 
           const admins = participants.filter(p => p.admin === "admin" || p.admin === "superadmin");
           if (admins.length === 0) {
-            return await sendFormattedMessage(sock, from, "❌ Aucun admin trouvé dans le groupe", msg);
+            return await sendFormattedMessage(sock, from, "❌ Aucun admin trouvé dans le groupe");
           }
 
           let text = `📣 Mention des admins :\n\n`;
@@ -969,7 +958,7 @@ class CommandHandler {
 
         } catch (err) {
           console.log("tagadmin error:", err);
-          await sendFormattedMessage(sock, from, "❌ Impossible de récupérer les admins", msg);
+          await sendFormattedMessage(sock, from, "❌ Impossible de récupérer les admins");
         }
       }
     });
@@ -983,18 +972,18 @@ class CommandHandler {
         const senderJid = msg.key.participant || msg.key.remoteJid;
         
         if (!isOwner(senderJid)) {
-          await sendFormattedMessage(sock, from, "❌ Commande réservée aux propriétaires", msg);
+          await sendFormattedMessage(sock, from, "❌ Commande réservée aux propriétaires");
           return;
         }
 
         if (!args[0]) {
-          await sendFormattedMessage(sock, from, "❌ Usage: .delowner 243XXXXXXXXX", msg);
+          await sendFormattedMessage(sock, from, "❌ Usage: .delowner 243XXXXXXXXX");
           return;
         }
 
         const number = args[0].replace(/\D/g, "");
         const jid = number + "@s.whatsapp.net";
-        await sendFormattedMessage(sock, from, `✅ Propriétaire supprimé :\n${jid}`, msg);
+        await sendFormattedMessage(sock, from, `✅ Propriétaire supprimé :\n${jid}`);
       }
     });
 
@@ -1130,7 +1119,7 @@ class CommandHandler {
         
         const helpText = `🛠️ *AIDE HEXGATE V3*\n\nPrefix: ${currentPrefix}\n\nCommandes principales:\n• ${currentPrefix}menu - Menu complet\n• ${currentPrefix}help - Cette aide\n• ${currentPrefix}hextech - Info HEX✦GATE\n• ${currentPrefix}tagall - Mention groupe\n• ${currentPrefix}purge - Purge groupe (admin)\n\n👑 Propriétaire: ${config.ownerNumber}\n👤 Vous: ${context?.sender || 'Inconnu'}`;
         
-        await sendFormattedMessage(sock, from, helpText, msg);
+        await sendFormattedMessage(sock, from, helpText);
       }
     });
 
@@ -1145,7 +1134,7 @@ class CommandHandler {
       
       if (context?.botPublic) {
         try {
-          await sendFormattedMessage(sock, msg.key.remoteJid, `❌ Commande "${cmd}" non reconnue. Tapez ${context?.prefix || prefix}menu pour voir la liste des commandes.`, msg);
+          await sendFormattedMessage(sock, msg.key.remoteJid, `❌ Commande "${cmd}" non reconnue. Tapez ${context?.prefix || prefix}menu pour voir la liste des commandes.`);
         } catch (error) {
           console.log(`${colors.yellow}⚠️ Impossible d'envoyer réponse${colors.reset}`);
         }
@@ -1183,7 +1172,7 @@ class CommandHandler {
       console.error(error);
       
       try {
-        await sendFormattedMessage(sock, msg.key.remoteJid, `❌ *ERREUR D'EXÉCUTION*\n\nCommande: ${cmd}\nErreur: ${error.message}\n\nContactez le développeur si le problème persiste.`, msg);
+        await sendFormattedMessage(sock, msg.key.remoteJid, `❌ *ERREUR D'EXÉCUTION*\n\nCommande: ${cmd}\nErreur: ${error.message}\n\nContactez le développeur si le problème persiste.`);
       } catch (sendError) {
         console.log(`${colors.yellow}⚠️ Impossible d'envoyer message d'erreur${colors.reset}`);
       }
@@ -1564,7 +1553,7 @@ ${colors.reset}`, (phone) => {
                             const mention = deletedBy.split("@")[0];
 
                             await sock.sendMessage(chatId, {
-                                text: `*𝙼𝚎𝚜𝚜𝚊𝚐𝚎 𝚜𝚞𝚙𝚙𝚛𝚒𝚖𝚎𝚛 𝚍𝚎:*@${mention}\n\n*Message :* ${originalText}\n\n> 𝚙𝚘𝚠𝚎𝚛𝚎𝚍 𝚋𝚢 𝙷𝙴𝚇𝚃𝙴𝙲𝙷`,
+                                text: `*𝙼𝚎𝚜𝚜𝚊𝚐𝚎 𝚜𝚞𝚙𝚙𝚛𝚒𝚖𝚎𝚖𝚎𝚗𝚝 𝚍𝚎:*@${mention}\n\n*Message :* ${originalText}\n\n> 𝚙𝚘𝚠𝚎𝚛𝚎𝚍 𝚋𝚢 𝙷𝙴𝚇𝚃𝙴𝙲𝙷`,
                                 mentions: [deletedBy]
                             });
 
@@ -1812,7 +1801,7 @@ ${colors.reset}`, (phone) => {
                         config.botPublic = true;
                         fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
                         
-                        await sendFormattedMessage(sock, OWNER_NUMBER, `✅ *BOT PASSÉ EN MODE PUBLIC*\n\nTous les utilisateurs peuvent maintenant utiliser les commandes.\n\n📊 Commandes disponibles: ${commandHandler.getCommandList().length}`, msg);
+                        await sendFormattedMessage(sock, OWNER_NUMBER, `✅ *BOT PASSÉ EN MODE PUBLIC*\n\nTous les utilisateurs peuvent maintenant utiliser les commandes.\n\n📊 Commandes disponibles: ${commandHandler.getCommandList().length}`);
                         console.log(`${colors.green}🔓 Mode public activé${colors.reset}`);
                         continue;
                     }
@@ -1822,7 +1811,7 @@ ${colors.reset}`, (phone) => {
                         config.botPublic = false;
                         fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
                         
-                        await sendFormattedMessage(sock, OWNER_NUMBER, `🔒 *BOT PASSÉ EN MODE PRIVÉ*\n\nSeul le propriétaire peut utiliser les commandes.`, msg);
+                        await sendFormattedMessage(sock, OWNER_NUMBER, `🔒 *BOT PASSÉ EN MODE PRIVÉ*\n\nSeul le propriétaire peut utiliser les commandes.`);
                         console.log(`${colors.green}🔒 Mode privé activé${colors.reset}`);
                         continue;
                     }
@@ -1832,7 +1821,7 @@ ${colors.reset}`, (phone) => {
                         const commandsText = commandList.slice(0, 10).map(cmd => `• ${prefix}${cmd}`).join('\n');
                         const moreCommands = commandList.length > 10 ? `\n... et ${commandList.length - 10} autres` : '';
                         
-                        await sendFormattedMessage(sock, OWNER_NUMBER, `📊 *STATUS DU BOT*\n\n🏷️ Nom: HEXGATE V3\n🔓 Mode: ${botPublic ? 'Public' : 'Privé'}\n📊 Commandes: ${commandList.length}\n💾 Messages sauvegardés: ${messageStore.size}\n🖼️ Images sauvegardées: ${fs.readdirSync(DELETED_IMAGES_FOLDER).length}\n⏰ Uptime: ${process.uptime().toFixed(0)}s\n\n📋 Commandes disponibles:\n${commandsText}${moreCommands}`, msg);
+                        await sendFormattedMessage(sock, OWNER_NUMBER, `📊 *STATUS DU BOT*\n\n🏷️ Nom: HEXGATE V3\n🔓 Mode: ${botPublic ? 'Public' : 'Privé'}\n📊 Commandes: ${commandList.length}\n💾 Messages sauvegardés: ${messageStore.size}\n🖼️ Images sauvegardées: ${fs.readdirSync(DELETED_IMAGES_FOLDER).length}\n⏰ Uptime: ${process.uptime().toFixed(0)}s\n\n📋 Commandes disponibles:\n${commandsText}${moreCommands}`);
                         continue;
                     }
                     
@@ -1854,12 +1843,12 @@ ${colors.reset}`, (phone) => {
                         const deletedCount = fs.readdirSync(DELETED_MESSAGES_FOLDER).length;
                         const imageCount = fs.readdirSync(DELETED_IMAGES_FOLDER).length;
                         
-                        await sendFormattedMessage(sock, OWNER_NUMBER, `🔄 *STATUS RESTAURATION*\n\n📊 Messages sauvegardés: ${deletedCount}\n🖼️ Images sauvegardées: ${imageCount}\n💾 En mémoire: ${messageStore.size}\n\n✅ Système de restauration actif!`, msg);
+                        await sendFormattedMessage(sock, OWNER_NUMBER, `🔄 *STATUS RESTAURATION*\n\n📊 Messages sauvegardés: ${deletedCount}\n🖼️ Images sauvegardées: ${imageCount}\n💾 En mémoire: ${messageStore.size}\n\n✅ Système de restauration actif!`);
                         continue;
                     }
                     
                     if (body === prefix + "help") {
-                        await sendFormattedMessage(sock, OWNER_NUMBER, `🛠️ *COMMANDES PROPRIÉTAIRE*\n\n• ${prefix}public - Mode public\n• ${prefix}private - Mode privé\n• ${prefix}status - Statut du bot\n• ${prefix}restore - Status restauration\n• ${prefix}help - Cette aide\n• ${prefix}menu - Liste des commandes\n\n🎯 Prefix actuel: "${prefix}"\n👑 Propriétaire: ${config.ownerNumber}`, msg);
+                        await sendFormattedMessage(sock, OWNER_NUMBER, `🛠️ *COMMANDES PROPRIÉTAIRE*\n\n• ${prefix}public - Mode public\n• ${prefix}private - Mode privé\n• ${prefix}status - Statut du bot\n• ${prefix}restore - Status restauration\n• ${prefix}help - Cette aide\n• ${prefix}menu - Liste des commandes\n\n🎯 Prefix actuel: "${prefix}"\n👑 Propriétaire: ${config.ownerNumber}`);
                         continue;
                     }
                 }
@@ -1957,22 +1946,17 @@ ${colors.reset}`, (phone) => {
 }
 
 // ============================================
-// 🚀 DÉMARRAGE AUTOMATIQUE DU BOT
+// 🚀 DÉMARRAGE
 // ============================================
 console.log(`${colors.magenta}🚀 Démarrage de HEXGATE V3...${colors.reset}`);
-
-// Démarrer le bot automatiquement
-setTimeout(() => {
-  startBot();
-}, 1000);
+startBot();
 
 // ============================================
-// 📦 EXPORTS POUR L'API WEB
+// 📦 EXPORTS POUR L'API
 // ============================================
 module.exports = {
-  bot: () => sock,
+  bot: sock,
   generatePairCode,
-  isBotReady: () => botReady,
-  config,
-  startBot
+  isBotReady,
+  config
 };
