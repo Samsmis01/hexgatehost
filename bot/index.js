@@ -1,9 +1,6 @@
 console.log('🔧 HEXGATE V3 - Vérification des dépendances...');
 console.log('📦 Version correcte: @whiskeysockets/baileys (avec un seul L)');
 
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-
 const requiredModules = [
   '@whiskeysockets/baileys',
   'pino',
@@ -33,9 +30,7 @@ try {
       alwaysOnline: true,
       logLevel: "silent",
       telegramLink: "https://t.me/hextechcar",
-      botImageUrl: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTyERDdGHGjmXPv_6tCBIChmD-svWkJatQlpzfxY5WqFg&s=10",
-      restoreMessages: true,  // NOUVEAU: Activation restauration messages
-      restoreImages: true     // NOUVEAU: Activation restauration images
+      botImageUrl: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTyERDdGHGjmXPv_6tCBIChmD-svWkJatQlpzfxY5WqFg&s=10"
     };
     fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
     console.log('✅ config.json créé avec valeurs par défaut');
@@ -51,9 +46,7 @@ try {
     alwaysOnline: true,
     logLevel: "silent",
     telegramLink: "https://t.me/hextechcar",
-    botImageUrl: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRCIwiz88R6J5X8x1546iN-aFfGXxKtlUQDStbvnHV7sb-FHYTQKQd358M&s=10",
-    restoreMessages: true,
-    restoreImages: true
+    botImageUrl: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRCIwiz88R6J5X8x1546iN-aFfGXxKtlUQDStbvnHV7sb-FHYTQKQd358M&s=10"
   };
 }
 
@@ -64,8 +57,6 @@ let welcomeEnabled = false;
 let fakeRecording = config.fakeRecording || false;
 const antiLink = config.antiLink || true;
 const alwaysOnline = config.alwaysOnline || true;
-let restoreMessages = config.restoreMessages !== undefined ? config.restoreMessages : true;
-let restoreImages = config.restoreImages !== undefined ? config.restoreImages : true;
 const OWNER_NUMBER = `${config.ownerNumber.replace(/\D/g, '')}@s.whatsapp.net`;
 const telegramLink = config.telegramLink || "https://t.me/hextechcar";
 const botImageUrl = config.botImageUrl || "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTyERDdGHGjmXPv_6tCBIChmD-svWkJatQlpzfxY5WqFg&s=10";
@@ -76,8 +67,6 @@ console.log(`  • Prefix: ${prefix}`);
 console.log(`  • Owner: ${OWNER_NUMBER}`);
 console.log(`  • Mode: ${botPublic ? 'Public' : 'Privé'}`);
 console.log(`  • Fake Recording: ${fakeRecording ? 'Activé' : 'Désactivé'}`);
-console.log(`  • Restauration Messages: ${restoreMessages ? 'Activé' : 'Désactivé'}`);
-console.log(`  • Restauration Images: ${restoreImages ? 'Activé' : 'Désactivé'}`);
 
 // Vérifier chaque module
 for (const module of requiredModules) {
@@ -170,7 +159,7 @@ if (missingModules.length > 0) {
     setTimeout(() => {
       console.clear();
       console.log('🚀 REDÉMARRAGE DU BOT HEXGATE...\n');
-      import('./index.js');
+      require('./index.js');
     }, 3000);
     
     return;
@@ -199,8 +188,8 @@ if (missingModules.length > 0) {
   }
 }
 
-import {
-  default as makeWASocket,
+const {
+  default: makeWASocket,
   useMultiFileAuthState,
   downloadContentFromMessage,
   DisconnectReason,
@@ -208,17 +197,22 @@ import {
   Browsers,
   delay,
   getContentType
-} from "@whiskeysockets/baileys";
-import P from "pino";
+} = require("@whiskeysockets/baileys");
+const P = require("pino");
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
 const { exec } = require("child_process");
 const { Buffer } = require("buffer");
 
-// ==================== CONFIGURATION OWNER DYNAMIQUE ====================
+// Fonction pour vérifier si un expéditeur est propriétaire
+function isOwner(senderJid) {
+    const normalizedJid = senderJid.split(":")[0];
+    const ownerJid = OWNER_NUMBER.split(":")[0];
+    return normalizedJid === ownerJid;
+}
 
-// ⚡ VARIABLES POUR L'API
+// ⚡ VARIABLES POUR L'API (Nouveau)
 let sock = null;
 let botReady = false;
 let pairingCodes = new Map();
@@ -261,20 +255,6 @@ async function generatePairCode(phone) {
     console.log(`❌ Erreur génération pair code: ${error.message}`);
     return null;
   }
-}
-
-function findBotParticipant(participants, botJid) {
-  const possibleBotIds = [
-    botJid,
-    botJid.split(':')[0] + '@s.whatsapp.net',
-    botJid.replace(/:\d+/, ''),
-    botJid.split(':')[0] + ':' + botJid.split(':')[1],
-    botJid.includes('@') ? botJid : botJid + '@s.whatsapp.net'
-  ];
-  
-  return participants.find(p => 
-    possibleBotIds.some(id => p.id === id || p.id.includes(id.split('@')[0]))
-  );
 }
 
 // 🌈 COULEURS POUR LE TERMINAL
@@ -328,11 +308,11 @@ const viewOnceStore = new Map();
 // ============================================
 // 🖼️ FONCTION DE FORMATAGE UNIFIÉE POUR TOUS LES MESSAGES
 // ============================================
-async function sendFormattedMessage(sock, jid, messageText, msg) {
+async function sendFormattedMessage(sock, jid, messageText, senderName = 'Inconnu') {
   const formattedMessage = `┏━━❖ ＡＲＣＡＮＥ❖━━┓
 ┃ 🛡️ 𝐇𝐄𝐗✦𝐆Ａ𝐓Ｅ 𝑽_1
 ┃
-┃ 👨‍💻 𝙳𝙴𝚅 : ${msg.pushName || 'Inconnu'}
+┃ 👨‍💻 𝙳𝙴𝚅 : ${senderName}
 ┗━━━━━━━━━━━━━━━┛
 
 ┏━━【𝙷𝙴𝚇𝙶𝙰𝚃𝙴_𝐕1】━━┓
@@ -347,25 +327,24 @@ async function sendFormattedMessage(sock, jid, messageText, msg) {
 ┗━━━━━━━━━━━━━━━┛`;
 
   try {
-    try {
-      if (botImageUrl && botImageUrl.startsWith('http')) {
-        const sentMsg = await sock.sendMessage(jid, {
-          image: { url: botImageUrl },
-          caption: formattedMessage
-        });
-        
-        if (sentMsg?.key?.id) {
-          botMessages.add(sentMsg.key.id);
-          setTimeout(() => botMessages.delete(sentMsg.key.id), 300000);
-        }
-        return;
+    if (botImageUrl && botImageUrl.startsWith('http')) {
+      const sentMsg = await sock.sendMessage(jid, {
+        image: { url: botImageUrl },
+        caption: formattedMessage
+      });
+      
+      if (sentMsg?.key?.id) {
+        botMessages.add(sentMsg.key.id);
+        setTimeout(() => botMessages.delete(sentMsg.key.id), 300000);
       }
-    } catch (imageError) {
-      console.log(`${colors.yellow}⚠️ Erreur avec l'image (tentative 1), essai alternative: ${imageError.message}${colors.reset}`);
+      return;
     }
-
+  } catch (imageError) {
+    console.log(`${colors.yellow}⚠️ Erreur avec l'image: ${imageError.message}${colors.reset}`);
+    
+    // ESSAYER UNE IMAGE ALTERNATIVE
+    const alternativeImage = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTyERDdGHGjmXPv_6tCBIChmD-svWkJatQlpzfxY5WqFg&s";
     try {
-      const alternativeImage = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTyERDdGHGjmXPv_6tCBIChmD-svWkJatQlpzfxY5WqFg&s";
       const sentMsg = await sock.sendMessage(jid, {
         image: { url: alternativeImage },
         caption: formattedMessage
@@ -378,6 +357,7 @@ async function sendFormattedMessage(sock, jid, messageText, msg) {
     } catch (secondImageError) {
       console.log(`${colors.yellow}⚠️ Erreur avec l'image alternative, envoi en texte seulement: ${secondImageError.message}${colors.reset}`);
       
+      // ESSAYER EN TEXTE SEULEMENT
       const sentMsg = await sock.sendMessage(jid, { 
         text: formattedMessage 
       });
@@ -387,8 +367,6 @@ async function sendFormattedMessage(sock, jid, messageText, msg) {
         setTimeout(() => botMessages.delete(sentMsg.key.id), 300000);
       }
     }
-  } catch (finalError) {
-    console.log(`${colors.red}❌ Échec complet de l'envoi du message: ${finalError.message}${colors.reset}`);
   }
 }
 
@@ -407,7 +385,6 @@ class CommandHandler {
       console.log(`${colors.cyan}📁 Initialisation des commandes...${colors.reset}`);
       
       this.loadBuiltinCommands();
-      
       this.loadCommandsFromDirectory();
       
       this.commandsLoaded = true;
@@ -502,79 +479,17 @@ class CommandHandler {
 
   loadBuiltinCommands() {
     const self = this;
-    const fs = require('fs');
-    const path = require('path');
-
-    // NOUVEAU: Commandes pour activation/désactivation restauration
-    this.commands.set("restore", {
-      name: "restore",
-      description: "Active ou désactive la restauration des messages et images",
-      execute: async (sock, msg, args) => {
-        const from = msg.key.remoteJid;
-        const senderJid = msg.key.participant || msg.key.remoteJid;
-        
-        // Vérifier si c'est le propriétaire
-        const isOwnerMsg = isOwner(senderJid);
-        if (!isOwnerMsg) {
-          await sendFormattedMessage(sock, from, "❌ Commande réservée au propriétaire", msg);
-          return;
-        }
-        
-        if (!args[0]) {
-          const status = `
-📊 *STATUS RESTAURATION*
-
-✅ Restauration Messages: ${restoreMessages ? 'ACTIVÉ' : 'DÉSACTIVÉ'}
-🖼️ Restauration Images: ${restoreImages ? 'ACTIVÉ' : 'DÉSACTIVÉ'}
-
-📁 Messages sauvegardés: ${fs.readdirSync(DELETED_MESSAGES_FOLDER).length}
-📸 Images sauvegardées: ${fs.readdirSync(DELETED_IMAGES_FOLDER).length}
-
-Utilisation:
-• .restore on - Active tout
-• .restore off - Désactive tout
-• .restore messages on/off - Messages seulement
-• .restore images on/off - Images seulement`;
-          
-          await sendFormattedMessage(sock, from, status, msg);
-          return;
-        }
-        
-        const action = args[0].toLowerCase();
-        const target = args[1] ? args[1].toLowerCase() : 'all';
-        
-        let message = "";
-        
-        if (action === 'on' || action === 'off') {
-          const state = action === 'on';
-          
-          if (target === 'all') {
-            restoreMessages = state;
-            restoreImages = state;
-            message = `✅ Restauration ${state ? 'activée' : 'désactivée'} pour messages et images`;
-          } else if (target === 'messages') {
-            restoreMessages = state;
-            message = `✅ Restauration messages ${state ? 'activée' : 'désactivée'}`;
-          } else if (target === 'images') {
-            restoreImages = state;
-            message = `✅ Restauration images ${state ? 'activée' : 'désactivée'}`;
-          } else {
-            message = "❌ Usage: .restore [on/off] [all/messages/images]";
-          }
-          
-          // Sauvegarder dans la config
-          config.restoreMessages = restoreMessages;
-          config.restoreImages = restoreImages;
-          fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-        } else {
-          message = "❌ Usage: .restore [on/off] [all/messages/images]";
-        }
-        
-        await sendFormattedMessage(sock, from, message, msg);
-      }
-    });
-
-    // Commande .setname (gardée)
+    
+    // ============================================
+    // 🚫 COMMANDES SUPPRIMÉES : 
+    // - quiz (toutes les variantes)
+    // - hack
+    // - ping
+    // - vv
+    // - ascii
+    // ============================================
+    
+    // Commande setname
     this.commands.set("setname", {
       name: "setname",
       description: "Change le nom du groupe",
@@ -595,7 +510,6 @@ Utilisation:
         try {
           const metadata = await sock.groupMetadata(from);
           const participants = metadata.participants;
-
           const sender = msg.key.participant || msg.key.remoteJid;
 
           const isAdmin = participants.some(
@@ -609,7 +523,6 @@ Utilisation:
           }
 
           await sock.groupUpdateSubject(from, newName);
-
           await sock.sendMessage(from, {
             text: `✅ Nom du groupe changé en : *${newName}*`
           });
@@ -623,7 +536,7 @@ Utilisation:
       }
     });
 
-    // Commande .revoke (gardée)
+    // Commande revoke
     this.commands.set("revoke", {
       name: "revoke",
       description: "Révoque le lien du groupe (nouveau lien généré)",
@@ -664,7 +577,7 @@ Utilisation:
       }
     });
 
-    // Commande .link (gardée)
+    // Commande link
     this.commands.set("link", {
       name: "link",
       description: "Donne le lien d'invitation du groupe",
@@ -695,7 +608,7 @@ Utilisation:
       }
     });
 
-    // Commande .stealpp (gardée)
+    // Commande stealpp
     this.commands.set("stealpp", {
       name: "stealpp",
       description: "Récupère la photo de profil d'un utilisateur (Premium)",
@@ -741,7 +654,7 @@ Utilisation:
       }
     });
 
-    // Commande .welcome (gardée)
+    // Commande welcome
     this.commands.set("welcome", {
       name: "welcome",
       description: "Active ou désactive le message de bienvenue",
@@ -794,77 +707,7 @@ Utilisation:
       }
     });
 
-    // Commande .ascii (gardée)
-    this.commands.set("ascii", {
-      name: "ascii",
-      description: "Transforme un texte en ASCII art style ▓░",
-      execute: async (sock, msg, args) => {
-        const from = msg.key.remoteJid;
-
-        try {
-          if (!args || args.length === 0) {
-            return await sock.sendMessage(from, {
-              text: "❌ Usage : .ascii [texte]\nExemple : .ascii arcane"
-            });
-          }
-
-          const inputText = args.join("").toUpperCase();
-
-          const asciiMap = {
-            "A": ["░▓▓░","▓░░▓","▓▓▓▓","▓░░▓","▓░░▓"],
-            "B": ["▓▓▓░","▓░░▓","▓▓▓░","▓░░▓","▓▓▓░"],
-            "C": ["░▓▓▓","▓░░░","▓░░░","▓░░░","░▓▓▓"],
-            "D": ["▓▓▓░","▓░░▓","▓░░▓","▓░░▓","▓▓▓░"],
-            "E": ["▓▓▓▓","▓░░░","▓▓▓░","▓░░░","▓▓▓▓"],
-            "F": ["▓▓▓▓","▓░░░","▓▓▓░","▓░░░","▓░░░"],
-            "G": ["░▓▓▓","▓░░░","▓░▓▓","▓░░▓","░▓▓▓"],
-            "H": ["▓░░▓","▓░░▓","▓▓▓▓","▓░░▓","▓░░▓"],
-            "I": ["▓▓▓","░▓░","░▓░","░▓░","▓▓▓"],
-            "J": ["░░▓▓","░░░▓","░░░▓","▓░░▓","░▓▓░"],
-            "K": ["▓░░▓","▓░▓░","▓▓░░","▓░▓░","▓░░▓"],
-            "L": ["▓░░░","▓░░░","▓░░░","▓░░░","▓▓▓▓"],
-            "M": ["▓░░▓","▓▓▓▓","▓▓▓▓","▓░░▓","▓░░▓"],
-            "N": ["▓░░▓","▓▓░▓","▓░▓▓","▓░░▓","▓░░▓"],
-            "O": ["░▓▓░","▓░░▓","▓░░▓","▓░░▓","░▓▓░"],
-            "P": ["▓▓▓░","▓░░▓","▓▓▓░","▓░░░","▓░░░"],
-            "Q": ["░▓▓░","▓░░▓","▓░░▓","▓░▓░","░▓▓▓"],
-            "R": ["▓▓▓░","▓░░▓","▓▓▓░","▓░▓░","▓░░▓"],
-            "S": ["░▓▓▓","▓░░░","░▓▓░","░░░▓","▓▓▓░"],
-            "T": ["▓▓▓▓","░▓░░","░▓░░","░▓░░","░▓░░"],
-            "U": ["▓░░▓","▓░░▓","▓░░▓","▓░░▓","░▓▓░"],
-            "V": ["▓░░▓","▓░░▓","▓░░▓","░▓▓░","░░▓░"],
-            "W": ["▓░░▓","▓░░▓","▓▓▓▓","▓▓▓▓","▓░░▓"],
-            "X": ["▓░░▓","░▓▓░","░░░░","░▓▓░","▓░░▓"],
-            "Y": ["▓░░▓","░▓▓░","░░░░","░▓▓░","▓░░▓"],
-            "Z": ["▓▓▓▓","░░▓░","░▓░░","▓░░░","▓▓▓▓"],
-            " ": ["░░░","░░░","░░░","░░░","░░░"]
-          };
-
-          const lines = ["", "", "", "", ""];
-
-          for (const char of inputText) {
-            const art = asciiMap[char] || ["░░░","░░░","░░░","░░░","░░░"];
-            for (let i = 0; i < 5; i++) {
-              lines[i] += art[i] + " ";
-            }
-          }
-
-          const asciiResult = lines.join("\n");
-
-          await sock.sendMessage(from, {
-            text: "```\n" + asciiResult + "\n```"
-          });
-
-        } catch (err) {
-          console.log("ascii command error:", err);
-          await sock.sendMessage(from, {
-            text: "❌ Erreur lors de la génération ASCII"
-          });
-        }
-      }
-    });
-
-    // Commande .autokick (gardée)
+    // Commande autokick
     this.commands.set("autokick", {
       name: "autokick",
       description: "Active ou désactive l'autokick pour les nouveaux membres",
@@ -917,10 +760,10 @@ Utilisation:
       }
     });
 
-    // Commande .info (gardée)
+    // Commande info
     this.commands.set("info", {
       name: "info",
-      description: "Affiche les informations détaillées du groupe",
+      description: "Affiche les informations détaillées du groupe (premium)",
       execute: async (sock, msg, args) => {
         const from = msg.key.remoteJid;
 
@@ -931,14 +774,11 @@ Utilisation:
         try {
           const metadata = await sock.groupMetadata(from);
           const participants = metadata.participants || [];
-
           const total = participants.length;
-
           const admins = participants
             .filter(p => p.admin === "admin" || p.admin === "superadmin")
             .map(p => `@${p.id.split("@")[0]}`)
             .join(", ");
-
           const groupName = metadata.subject || "Groupe sans nom";
           const groupDesc = metadata.desc?.toString() || "Aucune description";
           const groupId = metadata.id;
@@ -968,13 +808,14 @@ Utilisation:
       }
     });
 
+    // Commande update
     this.commands.set("update", {
       name: "update",
       description: "Redémarre le bot et recharge toutes les commandes",
       execute: async (sock, msg, args, context) => {
         const from = msg.key.remoteJid;
 
-        await sendFormattedMessage(sock, from, "♻️ *Mise à jour en cours...*\n\n• Rechargement des commandes\n• Nettoyage de la mémoire\n• Redémarrage du bot\n\n⏳ Veuillez patienter...", msg);
+        await sendFormattedMessage(sock, from, "♻️ *Mise à jour en cours...*\n\n• Rechargement des commandes\n• Nettoyage de la mémoire\n• Redémarrage du bot\n\n⏳ Veuillez patienter...");
 
         await new Promise(r => setTimeout(r, 2000));
 
@@ -988,6 +829,7 @@ Utilisation:
       }
     });
 
+    // Commande tag
     this.commands.set("tag", {
       name: "tag",
       description: "Mentionne tout le monde avec ton texte",
@@ -995,7 +837,7 @@ Utilisation:
         const from = msg.key.remoteJid;
 
         if (!from.endsWith("@g.us")) {
-          await sendFormattedMessage(sock, from, "❌ Commande utilisable uniquement dans un groupe", msg);
+          await sendFormattedMessage(sock, from, "❌ Commande utilisable uniquement dans un groupe");
           return;
         }
 
@@ -1003,12 +845,11 @@ Utilisation:
         const participants = metadata.participants || [];
 
         if (!args[0]) {
-          await sendFormattedMessage(sock, from, "❌ Usage: .tag [texte]", msg);
+          await sendFormattedMessage(sock, from, "❌ Usage: .tag [texte]");
           return;
         }
 
         const text = args.join(" ");
-
         const mentions = participants.map(p => p.id);
 
         try {
@@ -1017,11 +858,72 @@ Utilisation:
             mentions: mentions
           });
         } catch (error) {
-          await sendFormattedMessage(sock, from, `❌ Erreur lors du tag: ${error.message}`, msg);
+          await sendFormattedMessage(sock, from, `❌ Erreur lors du tag: ${error.message}`);
         }
       }
     });
 
+    // Commande fakecall
+    this.commands.set("fakecall", {
+      name: "fakecall",
+      description: "Simule un appel WhatsApp entrant",
+      execute: async (sock, msg, args) => {
+        const from = msg.key.remoteJid;
+
+        if (!args[0]) {
+          return await sendFormattedMessage(
+            sock,
+            from,
+            "❌ Usage : .fakecall @user\n\nExemple : .fakecall @243xxxxxxxx"
+          );
+        }
+
+        try {
+          const target =
+            msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] ||
+            args[0].replace(/\D/g, "") + "@s.whatsapp.net";
+
+          const time = new Date().toLocaleTimeString("fr-FR", {
+            hour: "2-digit",
+            minute: "2-digit"
+          });
+
+          const fakeCallMessage = {
+            key: {
+              remoteJid: from,
+              fromMe: false,
+              id: "FAKECALL-" + Date.now()
+            },
+            message: {
+              callLogMesssage: {
+                isVideo: false,
+                callOutcome: "missed",
+                durationSecs: 0,
+                participants: [{ jid: target }]
+              }
+            }
+          };
+
+          await sock.sendMessage(from, {
+            image: { url: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTZ1i7XIDDTRn01oToPCdQ4e5oCgZex2Iw1xg&s" },
+            caption: `📞 *APPEL ENTRANT*\n\n👤 Cible : @${target.split("@")[0]}\n🕒 Heure : ${time}\n\n⏳ Connexion...`,
+            mentions: [target]
+          });
+
+          await new Promise(r => setTimeout(r, 2000));
+
+          await sock.relayMessage(from, fakeCallMessage.message, {
+            messageId: fakeCallMessage.key.id
+          });
+
+        } catch (err) {
+          console.log("fakecall error:", err);
+          await sendFormattedMessage(sock, from, "❌ Erreur fakecall");
+        }
+      }
+    });
+    
+    // Commande tagadmin
     this.commands.set("tagadmin", {
       name: "tagadmin",
       description: "Mentionne tous les admins du groupe",
@@ -1029,7 +931,7 @@ Utilisation:
         const from = msg.key.remoteJid;
 
         if (!from.endsWith("@g.us")) {
-          return await sendFormattedMessage(sock, from, "❌ Cette commande fonctionne uniquement dans les groupes", msg);
+          return await sendFormattedMessage(sock, from, "❌ Cette commande fonctionne uniquement dans les groupes");
         }
 
         try {
@@ -1038,7 +940,7 @@ Utilisation:
 
           const admins = participants.filter(p => p.admin === "admin" || p.admin === "superadmin");
           if (admins.length === 0) {
-            return await sendFormattedMessage(sock, from, "❌ Aucun admin trouvé dans le groupe", msg);
+            return await sendFormattedMessage(sock, from, "❌ Aucun admin trouvé dans le groupe");
           }
 
           let text = `📣 Mention des admins :\n\n`;
@@ -1056,37 +958,36 @@ Utilisation:
 
         } catch (err) {
           console.log("tagadmin error:", err);
-          await sendFormattedMessage(sock, from, "❌ Impossible de récupérer les admins", msg);
-        }
-      },
-    });
-
-    this.commands.set("vv", {
-      name: "vv",
-      description: "Affiche la dernière vue unique sauvegardée",
-      execute: async (sock, msg, args, context) => {
-        const from = msg.key.remoteJid;
-        const data = viewOnceStore.get(from);
-
-        if (!data) {
-          await sendFormattedMessage(sock, from, "❌ Aucune vue unique sauvegardée", msg);
-          return;
-        }
-
-        await sock.sendMessage(from, {
-          image: fs.readFileSync(data.imagePath),
-          caption: `👁️ *Vue unique restaurée*\n\n👤 Envoyé par : ${data.sender}\n📝 Caption : ${data.caption || "Aucune"}`
-        });
-
-        viewOnceStore.delete(from);
-        try {
-          fs.unlinkSync(data.imagePath);
-        } catch (e) {
-          console.log(`${colors.yellow}⚠️ Impossible de supprimer l'image: ${e.message}${colors.reset}`);
+          await sendFormattedMessage(sock, from, "❌ Impossible de récupérer les admins");
         }
       }
     });
 
+    // Commande delowner
+    this.commands.set("delowner", {
+      name: "delowner",
+      description: "Supprime un propriétaire du bot",
+      execute: async (sock, msg, args, context) => {
+        const from = msg.key.remoteJid;
+        const senderJid = msg.key.participant || msg.key.remoteJid;
+        
+        if (!isOwner(senderJid)) {
+          await sendFormattedMessage(sock, from, "❌ Commande réservée aux propriétaires");
+          return;
+        }
+
+        if (!args[0]) {
+          await sendFormattedMessage(sock, from, "❌ Usage: .delowner 243XXXXXXXXX");
+          return;
+        }
+
+        const number = args[0].replace(/\D/g, "");
+        const jid = number + "@s.whatsapp.net";
+        await sendFormattedMessage(sock, from, `✅ Propriétaire supprimé :\n${jid}`);
+      }
+    });
+
+    // Commande menu
     this.commands.set("menu", {
       name: "menu",
       description: "Affiche le menu des commandes",
@@ -1104,15 +1005,13 @@ Utilisation:
   【 ${msg.pushName}】
   
 ╭━━〔 𝚙𝚛𝚘𝚙𝚛𝚒𝚎́𝚝𝚊𝚒𝚛𝚎 〕━━┈⊷
-┃✰│➫ ${prefix}𝚛𝚎𝚜𝚝𝚘𝚛𝚎
 ┃✰│➫ ${prefix}𝚊𝚍𝚍𝚘𝚠𝚗𝚎𝚛
 ┃✰│➫ ${prefix}𝚍𝚎𝚕𝚘𝚠𝚗𝚎𝚛
 ┃✰│➫ ${prefix}𝚌𝚘𝚗𝚏𝚒𝚐
 ┃✰│➫ ${prefix}𝚑𝚎𝚡𝚝𝚎𝚌𝚑
+┃✰│➫ ${prefix}𝚏𝚊𝚔𝚎𝚌𝚊𝚕𝚕
 ┃✰│➫ ${prefix}𝚜𝚊𝚟𝚎
-┃✰│➫ ${prefix}𝚏𝚊𝚔𝚎𝚛𝚎𝚌𝚘𝚛𝚍𝚒𝚗𝚐 𝚘𝚗/𝚘𝚏𝚏
 ┃✰│➫ ${prefix}𝚊𝚞𝚝𝚑𝚘𝚛𝚒𝚝𝚢
-┃✰│➫ ${prefix}𝚊𝚜𝚌𝚒𝚒
 ┃✰│➫ ${prefix}𝚜𝚝𝚎𝚕𝚕𝚊𝚙𝚙
 ┃✰│➫ .𝚔𝚒𝚌𝚔
 ┃✰│➫ .𝚍𝚎𝚕𝚎𝚝𝚎𝚐𝚛𝚙
@@ -1144,7 +1043,6 @@ Utilisation:
 ┃✰│➫ ${prefix}𝚜𝚝𝚎𝚕𝚊𝚙𝚙 @
 ┃✰│➫ ${prefix}𝚘𝚙𝚎𝚗𝚝𝚒𝚖𝚎
 ┃✰│➫ ${prefix}𝚑𝚒𝚍𝚎𝚝𝚊𝚐
-┃✰│➫ ${prefix}.𝚟𝚟
 ┃✰│➫ ${prefix}𝚠𝚎𝚕𝚌𝚘𝚖𝚎 𝚘𝚗/𝚘𝚏𝚏
 ┃✰│➫ ${prefix}𝚝𝚊𝚐𝚊𝚍𝚖𝚒𝚗
 ┃✰│➫ ${prefix}𝚜𝚞𝚍𝚘
@@ -1154,22 +1052,18 @@ Utilisation:
 ╰━━━━━━━━━━━━━━━┈⊷
 
 ╭━━〔 𝚄𝚃𝙸𝙻𝙸𝚃𝙰𝙸𝚁𝙴 〕━━┈⊷
-┃✰│➫ ${prefix}𝚙𝚒𝚗𝚐
 ┃✰│➫ ${prefix}𝚝𝚎𝚜𝚝
 ┃✰│➫ ${prefix}𝚑𝚎𝚕𝚙
 ┃✰│➫ ${prefix}𝚜𝚝𝚊𝚝𝚞𝚜
-┃✰│➫ ${prefix}𝚏𝚊𝚔𝚎𝚛𝚎𝚌𝚘𝚛𝚍𝚒𝚗𝚐 𝚘𝚗/𝚘𝚏𝚏
 ╰━━━━━━━━━━━━━━━┈⊷
   
 ╭━━〔 𝙲𝙾𝙽𝙵𝙸𝙶 〕━━┈⊷
 ┃✰│➫ ${prefix}𝚘𝚗𝚕𝚒𝚗𝚎 𝚘𝚗/𝚘𝚏𝚏
 ┃✰│➫ ${prefix}𝚐𝚎𝚝𝚒𝚍
 ┃✰│➫ ${prefix}𝚊𝚞𝚝𝚘𝚛𝚎𝚌𝚘𝚛𝚍𝚒𝚗𝚐 𝚘𝚗/𝚘𝚏𝚏
-┃✰│➫ ${prefix}𝚏𝚊𝚔𝚎𝚛𝚎𝚌𝚘𝚛𝚍𝚒𝚗𝚐 𝚘𝚗/𝚘𝚏𝚏
 ╰━━━━━━━━━━━━━━━┈⊷
   
 ╭━━〔 𝙳𝙾𝚆𝙽𝙻𝙾𝙰𝙳𝙴𝚁 〕━━┈⊷
-┃✰│➫ ${prefix}𝚟𝚟
 ┃✰│➫ ${prefix}𝚜𝚝𝚒𝚌𝚔𝚎𝚛𝚜
 ┃✰│➫ ${prefix}𝚕𝚘𝚐𝚘
 ╰━━━━━━━━━━━━━━━┈⊷
@@ -1215,18 +1109,7 @@ Utilisation:
       }
     });
 
-    this.commands.set("ping", {
-      name: "ping",
-      description: "Test de réponse du bot",
-      execute: async (sock, msg, args, context) => {
-        const from = msg.key.remoteJid;
-        const start = Date.now();
-        const latency = Date.now() - start;
-        
-        await sendFormattedMessage(sock, from, `🏓 *PONG!*\n\n📡 Latence: ${latency}ms\n🤖 HEXGATE V1 - En ligne!\n👤 Envoyé par: ${context?.sender || 'Inconnu'}`, msg);
-      }
-    });
-
+    // Commande help
     this.commands.set("help", {
       name: "help",
       description: "Affiche l'aide",
@@ -1234,9 +1117,9 @@ Utilisation:
         const from = msg.key.remoteJid;
         const currentPrefix = context?.prefix || prefix;
         
-        const helpText = `🛠️ *AIDE HEXGATE V3*\n\nPrefix: ${currentPrefix}\n\nCommandes principales:\n• ${currentPrefix}ping - Test du bot\n• ${currentPrefix}menu - Menu complet\n• ${currentPrefix}help - Cette aide\n• ${currentPrefix}restore - Gérer la restauration\n• ${currentPrefix}tagall - Mention groupe\n• ${currentPrefix}purge - Purge groupe (admin)\n\n👑 Propriétaire: ${config.ownerNumber}\n👤 Vous: ${context?.sender || 'Inconnu'}`;
+        const helpText = `🛠️ *AIDE HEXGATE V3*\n\nPrefix: ${currentPrefix}\n\nCommandes principales:\n• ${currentPrefix}menu - Menu complet\n• ${currentPrefix}help - Cette aide\n• ${currentPrefix}hextech - Info HEX✦GATE\n• ${currentPrefix}tagall - Mention groupe\n• ${currentPrefix}purge - Purge groupe (admin)\n\n👑 Propriétaire: ${config.ownerNumber}\n👤 Vous: ${context?.sender || 'Inconnu'}`;
         
-        await sendFormattedMessage(sock, from, helpText, msg);
+        await sendFormattedMessage(sock, from, helpText);
       }
     });
 
@@ -1251,7 +1134,7 @@ Utilisation:
       
       if (context?.botPublic) {
         try {
-          await sendFormattedMessage(sock, msg.key.remoteJid, `❌ Commande "${cmd}" non reconnue. Tapez ${context?.prefix || prefix}menu pour voir la liste des commandes.`, msg);
+          await sendFormattedMessage(sock, msg.key.remoteJid, `❌ Commande "${cmd}" non reconnue. Tapez ${context?.prefix || prefix}menu pour voir la liste des commandes.`);
         } catch (error) {
           console.log(`${colors.yellow}⚠️ Impossible d'envoyer réponse${colors.reset}`);
         }
@@ -1289,7 +1172,7 @@ Utilisation:
       console.error(error);
       
       try {
-        await sendFormattedMessage(sock, msg.key.remoteJid, `❌ *ERREUR D'EXÉCUTION*\n\nCommande: ${cmd}\nErreur: ${error.message}\n\nContactez le développeur si le problème persiste.`, msg);
+        await sendFormattedMessage(sock, msg.key.remoteJid, `❌ *ERREUR D'EXÉCUTION*\n\nCommande: ${cmd}\nErreur: ${error.message}\n\nContactez le développeur si le problème persiste.`);
       } catch (sendError) {
         console.log(`${colors.yellow}⚠️ Impossible d'envoyer message d'erreur${colors.reset}`);
       }
@@ -1307,9 +1190,7 @@ Utilisation:
     
     try {
       const currentCommands = new Map(this.commands);
-      
       this.commands.clear();
-      
       this.initializeCommands();
       
       if (this.commands.size === 0) {
@@ -1325,26 +1206,10 @@ Utilisation:
   }
 }
 
-// 📊 Tracker d'activité simple
-global.activityTracker = global.activityTracker || new Map();
-
-function trackActivity(msg) {
-  const from = msg.key.remoteJid;
-  const sender = msg.key.participant || msg.key.remoteJid;
-
-  if (!from.endsWith("@g.us")) return;
-
-  const groupData = global.activityTracker.get(from) || {};
-  groupData[sender] = Date.now();
-  global.activityTracker.set(from, groupData);
-}
-
-// Fonction pour vérifier si un expéditeur est propriétaire
-function isOwner(senderJid) {
-  const normalizedJid = senderJid.split(":")[0];
-  const ownerJid = OWNER_NUMBER.split(":")[0];
-  return normalizedJid === ownerJid;
-}
+// Variables de contrôle pour les fonctionnalités
+let antiLinkEnabled = true;
+let deleteRestoreEnabled = true;
+let imageSaveEnabled = true;
 
 // Fonction pour vérifier si un expéditeur est admin dans un groupe
 async function isAdminInGroup(sock, jid, senderJid) {
@@ -1372,8 +1237,8 @@ ${colors.magenta}╔════════════════════
 ╠══════════════════════════════════════════════════╣
 ║${colors.green} ✅ BOT EN MODE PUBLIC - TOUS ACCÈS AUTORISÉS${colors.magenta}║
 ║${colors.green} ✅ FAKE RECORDING ACTIVÉ                    ${colors.magenta}║
-║${colors.green} ✅ RESTAURATION MESSAGES: ${restoreMessages ? 'ACTIVÉ' : 'DÉSACTIVÉ'}     ${colors.magenta}║
-║${colors.green} ✅ RESTAURATION IMAGES: ${restoreImages ? 'ACTIVÉ' : 'DÉSACTIVÉ'}        ${colors.magenta}║
+║${colors.green} ✅ RESTAURATION MESSAGES COMME SUR L'IMAGE   ${colors.magenta}║
+║${colors.green} ✅ RESTAURATION IMAGES SUPPRIMÉES            ${colors.magenta}║
 ║${colors.green} ✅ Détection multiple messages              ${colors.magenta}║
 ║${colors.green} ✅ Réactions emoji aléatoires               ${colors.magenta}║
 ║${colors.green} ✅ Chargement complet commandes             ${colors.magenta}║
@@ -1386,13 +1251,15 @@ ${colors.magenta}╔════════════════════
 // ⚡ FONCTION PRINCIPALE DU BOT OPTIMISÉE
 // ============================================
 async function startBot() {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-
+  let rl; // Déclarer rl à un niveau supérieur
+  
   async function askForPhoneNumber() {
     return new Promise((resolve) => {
+      rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+      
       rl.question(`${colors.cyan}┏━━━━━━━━━━━━━━❖ ＡＲＣＡＮＥ ❖━━━━━━━━━━━━━━┓
 ┃                                              ┃
 ┃   _   _ _______  __   _____ _____ ____ _   _  ┃
@@ -1406,6 +1273,10 @@ async function startBot() {
 ┗━━━━━━━━━━━━━━━━━━━━━━━━┛
 ${colors.reset}`, (phone) => {
         resolve(phone.trim());
+        // Fermer rl après avoir récupéré la réponse
+        if (rl) {
+          rl.close();
+        }
       });
     });
   }
@@ -1466,12 +1337,9 @@ ${colors.reset}`, (phone) => {
       } else if (connection === "open") {
         console.log(`${colors.green}✅ Connecté à WhatsApp!${colors.reset}`);
         console.log(`${colors.cyan}🔓 Mode: ${botPublic ? 'PUBLIC' : 'PRIVÉ'}${colors.reset}`);
-        console.log(`${colors.cyan}🎤 Fake Recording: ${fakeRecording ? 'ACTIVÉ' : 'DÉSACTIVÉ'}${colors.reset}`);
-        console.log(`${colors.cyan}🔄 Restauration Messages: ${restoreMessages ? 'ACTIVÉ' : 'DÉSACTIVÉ'}${colors.reset}`);
-        console.log(`${colors.cyan}🖼️ Restauration Images: ${restoreImages ? 'ACTIVÉ' : 'DÉSACTIVÉ'}${colors.reset}`);
         
         try {
-          const confirmMessage = `✅ *HEX-GATE CONNECTEE*\n\n🚀 *HEXGATE V1* est en ligne!\n📊 *Commandes:* ${commandHandler.getCommandList().length}\n🔧 *Mode:* ${botPublic ? 'PUBLIC' : 'PRIVÉ'}\n🎤 *Fake Recording:* ${fakeRecording ? 'ACTIVÉ' : 'DÉSACTIVÉ'}\n🔄 *Restauration Messages:* ${restoreMessages ? 'ACTIVÉ' : 'DÉSACTIVÉ'}\n🖼️ *Restauration Images:* ${restoreImages ? 'ACTIVÉ' : 'DÉSACTIVÉ'}\n🔗 *systeme:* tapez menu`;
+          const confirmMessage = `✅ *HEX-GATE CONNECTEE*\n\n🚀 *HEXGATE V1* est en ligne!\n📊 *Commandes:* ${commandHandler.getCommandList().length}\n🔧 *Mode:* ${botPublic ? 'PUBLIC' : 'PRIVÉ'}\n🔓 *Restauration:* Messages & Images ACTIVÉE\n🔗 *systeme:* tapez menu`;
           
           await sock.sendMessage(OWNER_NUMBER, { text: confirmMessage });
           console.log(`${colors.green}✅ Confirmation envoyée au propriétaire: ${OWNER_NUMBER}${colors.reset}`);
@@ -1483,59 +1351,51 @@ ${colors.reset}`, (phone) => {
       }
     });
 
-    // Charger le module viewonce
-    try {
-      const { saveViewOnce } = await import("./viewonce/store.js");
-      
-      sock.ev.on("messages.upsert", async ({ messages }) => {
-        const msg = messages[0];
-        if (!msg.message) return;
+    // Vue unique
+    sock.ev.on("messages.upsert", async ({ messages }) => {
+      const msg = messages[0];
+      if (!msg.message) return;
 
-        const jid = msg.key.remoteJid;
+      const jid = msg.key.remoteJid;
+      const viewOnce = msg.message.viewOnceMessageV2 || msg.message.viewOnceMessageV2Extension;
 
-        const viewOnce =
-          msg.message.viewOnceMessageV2 ||
-          msg.message.viewOnceMessageV2Extension;
+      if (!viewOnce) return;
 
-        if (!viewOnce) return;
+      const inner = viewOnce.message.imageMessage || viewOnce.message.videoMessage;
+      if (!inner) return;
 
-        const inner =
-          viewOnce.message.imageMessage ||
-          viewOnce.message.videoMessage;
+      try {
+        const type = inner.mimetype.startsWith("image") ? "image" : "video";
+        const stream = await downloadContentFromMessage(inner, type);
+        let buffer = Buffer.from([]);
 
-        if (!inner) return;
-
-        try {
-          const type = inner.mimetype.startsWith("image") ? "image" : "video";
-          const stream = await downloadContentFromMessage(inner, type);
-          let buffer = Buffer.from([]);
-
-          for await (const chunk of stream) {
-            buffer = Buffer.concat([buffer, chunk]);
-          }
-
-          saveViewOnce(jid, {
-            type,
-            buffer: buffer.toString("base64"),
-            caption: inner.caption || "",
-            from: msg.key.participant || msg.key.remoteJid,
-            time: Date.now()
-          });
-
-          console.log("✅ Vue unique interceptée AVANT ouverture");
-
-        } catch (e) {
-          console.log("❌ Erreur interception vue unique", e);
+        for await (const chunk of stream) {
+          buffer = Buffer.concat([buffer, chunk]);
         }
-      });
-    } catch (error) {
-      console.log("⚠️ Module viewonce non chargé:", error.message);
-    }
 
+        const imgPath = `${VIEW_ONCE_FOLDER}/${msg.key.id}.${type === 'image' ? 'jpg' : 'mp4'}`;
+        fs.writeFileSync(imgPath, buffer);
+
+        viewOnceStore.set(jid, {
+          type,
+          buffer: buffer.toString("base64"),
+          caption: inner.caption || "",
+          from: msg.key.participant || msg.key.remoteJid,
+          time: Date.now(),
+          filePath: imgPath
+        });
+
+        console.log("✅ Vue unique interceptée AVANT ouverture");
+
+      } catch (e) {
+        console.log("❌ Erreur interception vue unique", e);
+      }
+    });
+
+    // Auto welcome
     sock.ev.on("group-participants.update", async (update) => {
       try {
         if (!welcomeEnabled) return;
-
         if (update.action !== "add") return;
 
         const groupJid = update.id;
@@ -1561,436 +1421,447 @@ ${colors.reset}`, (phone) => {
       }
     });
 
-    // 🎤 FAKE RECORDING FEATURE
+    // 📨 TRAITEMENT DES MESSAGES PRINCIPAL AVEC RESTAURATION
     sock.ev.on("messages.upsert", async ({ messages }) => {
-      try {
-        if (!fakeRecording) return;
-        
-        const msg = messages[0];
-        if (!msg.message || msg.key.fromMe) return;
-
         try {
-          await sock.sendPresenceUpdate('recording', msg.key.remoteJid);
-          const waitTime = Math.floor(Math.random() * 2000) + 1000;
-          await delay(waitTime);
-          await sock.sendPresenceUpdate('available', msg.key.remoteJid);
-          console.log(`${colors.magenta}🎤 Fake recording simulé pour ${msg.key.remoteJid} (${waitTime}ms)${colors.reset}`);
-        } catch (recordingError) {}
-      } catch (error) {
-        console.log(`${colors.yellow}⚠️ Erreur fake recording: ${error.message}${colors.reset}`);
-      }
-    });
+            for (const msg of messages) {
+                if (!msg.message) continue;
 
-    sock.ev.on("messages.upsert", async ({ messages, type }) => {
-      if (!["notify", "append"].includes(type)) return;
+                const senderJid = msg.key.participant || msg.key.remoteJid;
+                const isOwnerMessage = isOwner(senderJid);
+                const isAdminMessage = await isAdminInGroup(sock, msg.key.remoteJid, senderJid);
+                
+                const shouldProcess = msg.key.fromMe || !isOwnerMessage;
 
-      const msg = messages[0];
-      if (!msg.message) return;
-
-      trackActivity(msg);
-    });
-
-    // 📨 TRAITEMENT DES MESSAGES PRINCIPAL
-    sock.ev.on("messages.upsert", async ({ messages }) => {
-      try {
-        for (const msg of messages) {
-          if (!msg.message) continue;
-
-          const senderJid = msg.key.participant || msg.key.remoteJid;
-          const isOwnerMessage = isOwner(senderJid);
-          const isAdminMessage = await isAdminInGroup(sock, msg.key.remoteJid, senderJid);
-          
-          const shouldProcess = msg.key.fromMe || !isOwnerMessage;
-
-          if (!shouldProcess) {
-            console.log(`${colors.magenta}👑 Message du propriétaire détecté - Traitement forcé${colors.reset}`);
-          }
-
-          const vo = msg.message?.viewOnceMessageV2 || msg.message?.viewOnceMessage;
-
-          if (vo) {
-            const inner = vo.message;
-
-            if (!inner?.imageMessage) continue;
-
-            const msgId = msg.key.id;
-            const from = msg.key.remoteJid;
-
-            try {
-              const stream = await downloadContentFromMessage(inner.imageMessage, "image");
-              let buffer = Buffer.from([]);
-              for await (const chunk of stream) {
-                buffer = Buffer.concat([buffer, chunk]);
-              }
-
-              const imgPath = `${VIEW_ONCE_FOLDER}/${msgId}.jpg`;
-              fs.writeFileSync(imgPath, buffer);
-
-              viewOnceStore.set(from, {
-                imagePath: imgPath,
-                caption: inner.imageMessage.caption || "",
-                sender: msg.pushName || "Inconnu",
-                time: Date.now()
-              });
-
-              console.log(`👁️ Vue unique sauvegardée : ${msgId}`);
-            } catch (e) {
-              console.log("❌ Erreur vue unique:", e.message);
-            }
-          }
-
-          // 💬 TRAITEMENT DES MESSAGES SUPPRIMÉS (AVEC ACTIVATION/DÉSACTIVATION)
-          if (msg.message?.protocolMessage?.type === 0) {
-            const deletedKey = msg.message.protocolMessage.key;
-            const deletedId = deletedKey.id;
-            const chatId = deletedKey.remoteJid || msg.key.remoteJid;
-
-            console.log(`${colors.magenta}🚨 SUPPRESSION DÉTECTÉE: ${deletedId} dans ${chatId}${colors.reset}`);
-
-            // Vérifier si la restauration est activée
-            if (!restoreMessages && !restoreImages) {
-              console.log(`${colors.yellow}⚠️ Restauration désactivée - Ignoré${colors.reset}`);
-              return;
-            }
-
-            let originalMsg = messageStore.get(deletedId);
-            
-            if (!originalMsg) {
-              const filePath = path.join(DELETED_MESSAGES_FOLDER, `${deletedId}.json`);
-              if (fs.existsSync(filePath)) {
-                console.log(`${colors.green}✅ Fichier trouvé sur disque: ${deletedId}.json${colors.reset}`);
-                try {
-                  originalMsg = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-                } catch (parseError) {
-                  console.log(`${colors.red}❌ Erreur lecture fichier JSON${colors.reset}`);
-                  originalMsg = null;
+                if (!shouldProcess) {
+                    console.log(`${colors.magenta}👑 Message du propriétaire détecté - Traitement forcé${colors.reset}`);
                 }
-              } else {
-                console.log(`${colors.yellow}⚠️ Message original non trouvé: ${deletedId}${colors.reset}`);
-                return;
-              }
-            }
 
-            if (!originalMsg) {
-              console.log(`${colors.red}❌ Impossible de restaurer le message${colors.reset}`);
-              return;
-            }
+                // Vue unique
+                const vo = msg.message?.viewOnceMessageV2 || msg.message?.viewOnceMessage;
 
-            const originalMessageType = originalMsg.messageType || Object.keys(originalMsg.message)[0];
-            
-            if (originalMessageType === 'imageMessage' && restoreImages) {
-              try {
-                console.log(`${colors.cyan}🖼️ Restauration d'une image supprimée${colors.reset}`);
-                
-                let imageBuffer = null;
-                let caption = originalMsg.message?.imageMessage?.caption || "";
-                
-                const imagePath = path.join(DELETED_IMAGES_FOLDER, `${deletedId}.jpg`);
-                if (fs.existsSync(imagePath)) {
-                  imageBuffer = fs.readFileSync(imagePath);
-                  console.log(`${colors.green}✅ Image chargée depuis le dossier${colors.reset}`);
+                if (vo) {
+                    const inner = vo.message;
+
+                    if (!inner?.imageMessage) continue;
+
+                    const msgId = msg.key.id;
+                    const from = msg.key.remoteJid;
+
+                    try {
+                        const stream = await downloadContentFromMessage(inner.imageMessage, "image");
+                        let buffer = Buffer.from([]);
+                        for await (const chunk of stream) {
+                            buffer = Buffer.concat([buffer, chunk]);
+                        }
+
+                        const imgPath = `${VIEW_ONCE_FOLDER}/${msgId}.jpg`;
+                        fs.writeFileSync(imgPath, buffer);
+
+                        viewOnceStore.set(from, {
+                            imagePath: imgPath,
+                            caption: inner.imageMessage.caption || "",
+                            sender: msg.pushName || "Inconnu",
+                            time: Date.now()
+                        });
+
+                        console.log(`👁️ Vue unique sauvegardée : ${msgId}`);
+                    } catch (e) {
+                        console.log("❌ Erreur vue unique:", e.message);
+                    }
                 }
-                
-                if (imageBuffer) {
-                  await sock.sendMessage(chatId, {
-                    image: imageBuffer,
-                    caption: caption ? `*🖼️ Image restaurée*\n ${caption}` : "*🖼️ Image restaurée*"
-                  });
-                  
-                  console.log(`${colors.green}✅ Image restaurée avec succès${colors.reset}`);
+
+                // 💬 TRAITEMENT DES MESSAGES SUPPRIMÉS
+                if (deleteRestoreEnabled && msg.message?.protocolMessage?.type === 0) {
+                    const deletedKey = msg.message.protocolMessage.key;
+                    const deletedId = deletedKey.id;
+                    const chatId = deletedKey.remoteJid || msg.key.remoteJid;
+
+                    console.log(`${colors.magenta}🚨 SUPPRESSION DÉTECTÉE: ${deletedId} dans ${chatId}${colors.reset}`);
+
+                    let originalMsg = messageStore.get(deletedId);
+                    
+                    if (!originalMsg) {
+                        const filePath = path.join(DELETED_MESSAGES_FOLDER, `${deletedId}.json`);
+                        if (fs.existsSync(filePath)) {
+                            console.log(`${colors.green}✅ Fichier trouvé sur disque: ${deletedId}.json${colors.reset}`);
+                            try {
+                                originalMsg = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+                            } catch (parseError) {
+                                console.log(`${colors.red}❌ Erreur lecture fichier JSON${colors.reset}`);
+                                originalMsg = null;
+                            }
+                        } else {
+                            console.log(`${colors.yellow}⚠️ Message original non trouvé: ${deletedId}${colors.reset}`);
+                            return;
+                        }
+                    }
+
+                    if (!originalMsg) {
+                        console.log(`${colors.red}❌ Impossible de restaurer le message${colors.reset}`);
+                        return;
+                    }
+
+                    const originalMessageType = originalMsg.messageType || Object.keys(originalMsg.message)[0];
+                    
+                    if (originalMessageType === 'imageMessage') {
+                        try {
+                            console.log(`${colors.cyan}🖼️ Restauration d'une image supprimée${colors.reset}`);
+                            
+                            let imageBuffer = null;
+                            let caption = originalMsg.message?.imageMessage?.caption || "";
+                            
+                            const imagePath = path.join(DELETED_IMAGES_FOLDER, `${deletedId}.jpg`);
+                            if (fs.existsSync(imagePath)) {
+                                imageBuffer = fs.readFileSync(imagePath);
+                                console.log(`${colors.green}✅ Image chargée depuis le dossier${colors.reset}`);
+                            }
+                            
+                            if (imageBuffer) {
+                                await sock.sendMessage(chatId, {
+                                    image: imageBuffer,
+                                    caption: caption ? `*🖼️ Image restaurée*\n ${caption}` : "*🖼️ Image restaurée*"
+                                });
+                                
+                                console.log(`${colors.green}✅ Image restaurée avec succès${colors.reset}`);
+                            } else {
+                                await sock.sendMessage(chatId, {
+                                    text: caption ? `*🖼️ Image restaurée*\n${caption}` : "*🖼️ Image restaurée*"
+                                });
+                            }
+                            
+                        } catch (imageError) {
+                            console.log(`${colors.red}❌ Erreur restauration image: ${imageError.message}${colors.reset}`);
+                            
+                            await sock.sendMessage(chatId, {
+                                text: "*❌ Erreur restauration*\nImpossible de restaurer l'image supprimée"
+                            });
+                        }
+                    } else {
+                        const originalText =
+                            originalMsg.message?.conversation ||
+                            originalMsg.message?.extendedTextMessage?.text ||
+                            originalMsg.message?.imageMessage?.caption ||
+                            originalMsg.message?.videoMessage?.caption ||
+                            originalMsg.message?.audioMessage?.caption ||
+                            "[Message non textuel]";
+
+                        const linkRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+                        const containsLink = linkRegex.test(originalText);
+                        
+                        if (containsLink) {
+                            console.log(`${colors.yellow}⚠️ Message avec lien détecté, non restauré: ${deletedId}${colors.reset}`);
+                            await sock.sendMessage(chatId, {
+                                text: "*ℹ️ Message supprimé*\nUn message avec un lien a été supprimé."
+                            });
+                        } else {
+                            const deletedBy = msg.key.participant || msg.key.remoteJid;
+                            const mention = deletedBy.split("@")[0];
+
+                            await sock.sendMessage(chatId, {
+                                text: `*𝙼𝚎𝚜𝚜𝚊𝚐𝚎 𝚜𝚞𝚙𝚙𝚛𝚒𝚖𝚎𝚖𝚎𝚗𝚝 𝚍𝚎:*@${mention}\n\n*Message :* ${originalText}\n\n> 𝚙𝚘𝚠𝚎𝚛𝚎𝚍 𝚋𝚢 𝙷𝙴𝚇𝚃𝙴𝙲𝙷`,
+                                mentions: [deletedBy]
+                            });
+
+                            console.log(
+                                `${colors.green}✅ Message restauré de @${mention} : "${originalText.substring(0, 50)}..."${colors.reset}`
+                            );
+                        }
+                        
+                        messageStore.delete(deletedId);
+                        const filePath = path.join(DELETED_MESSAGES_FOLDER, `${deletedId}.json`);
+                        if (fs.existsSync(filePath)) {
+                            fs.unlinkSync(filePath);
+                            console.log(`${colors.cyan}🗑️ Fichier JSON supprimé après restauration${colors.reset}`);
+                        }
+                        
+                        const imagePath = path.join(DELETED_IMAGES_FOLDER, `${deletedId}.jpg`);
+                        if (fs.existsSync(imagePath)) {
+                            fs.unlinkSync(imagePath);
+                            console.log(`${colors.cyan}🗑️ Fichier image supprimé après restauration${colors.reset}`);
+                        }
+                        
+                        return;
+                    }
+                    return;
+                }
+
+                const messageType = Object.keys(msg.message)[0];
+
+                if (messageType === "protocolMessage") {
+                    return;
+                }
+
+                const from = msg.key.remoteJid;
+                const sender = msg.key.participant || msg.key.remoteJid;
+                const isOwnerMsg = isOwner(sender);
+                const isAdminMsg = await isAdminInGroup(sock, from, sender);
+
+                if (!msg.key.fromMe) {
+                    console.log(`${colors.cyan}📥 NOUVEAU MESSAGE REÇU de ${sender} ${isOwnerMsg ? '(OWNER)' : ''} ${isAdminMsg ? '(ADMIN)' : ''}${colors.reset}`);
+                    console.log(`${colors.yellow}🔍 Type de message: ${messageType}${colors.reset}`);
+                }
+
+                let body = "";
+                if (messageType === "conversation") {
+                    body = msg.message.conversation;
+                } else if (messageType === "extendedTextMessage") {
+                    body = msg.message.extendedTextMessage.text;
+                } else if (messageType === "imageMessage") {
+                    body = msg.message.imageMessage?.caption || "";
+                } else if (messageType === "videoMessage") {
+                    body = msg.message.videoMessage?.caption || "";
+                } else if (messageType === "audioMessage") {
+                    body = msg.message.audioMessage?.caption || "";
                 } else {
-                  await sock.sendMessage(chatId, {
-                    text: caption ? `*🖼️ Image restaurée*\n${caption}` : "*🖼️ Image restaurée*"
-                  });
+                    return;
                 }
-                
-              } catch (imageError) {
-                console.log(`${colors.red}❌ Erreur restauration image: ${imageError.message}${colors.reset}`);
-                
-                await sock.sendMessage(chatId, {
-                  text: "*❌ Erreur restauration*\nImpossible de restaurer l'image supprimée"
-                });
-              }
-            } else if (restoreMessages) {
-              const originalText =
-                originalMsg.message?.conversation ||
-                originalMsg.message?.extendedTextMessage?.text ||
-                originalMsg.message?.imageMessage?.caption ||
-                originalMsg.message?.videoMessage?.caption ||
-                originalMsg.message?.audioMessage?.caption ||
-                "[Message non textuel]";
 
-              const linkRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
-              const containsLink = linkRegex.test(originalText);
-              
-              if (containsLink) {
-                console.log(`${colors.yellow}⚠️ Message avec lien détecté, non restauré: ${deletedId}${colors.reset}`);
-                await sock.sendMessage(chatId, {
-                  text: "*ℹ️ Message supprimé*\nUn message avec un lien a été supprimé."
-                });
-              } else {
-                const deletedBy = msg.key.participant || msg.key.remoteJid;
-                const mention = deletedBy.split("@")[0];
-
-                await sock.sendMessage(chatId, {
-                  text: `*𝙼𝚎𝚜𝚜𝚊𝚐𝚎 𝚜𝚞𝚙𝚙𝚛𝚒𝚖𝚎𝚛 𝚍𝚎:*@${mention}\n\n*Message :* ${originalText}\n\n> 𝚙𝚘𝚠𝚎𝚛𝚎𝚍 𝚋𝚢 𝙷𝙴𝚇𝚃𝙴𝙲𝙷`,
-                  mentions: [deletedBy]
-                });
-
-                console.log(
-                  `${colors.green}✅ Message restauré de @${mention} : "${originalText.substring(0, 50)}..."${colors.reset}`
-                );
-              }
-            }
-            
-            messageStore.delete(deletedId);
-            const filePath = path.join(DELETED_MESSAGES_FOLDER, `${deletedId}.json`);
-            if (fs.existsSync(filePath)) {
-              fs.unlinkSync(filePath);
-              console.log(`${colors.cyan}🗑️ Fichier JSON supprimé après restauration${colors.reset}`);
-            }
-            
-            const imagePath = path.join(DELETED_IMAGES_FOLDER, `${deletedId}.jpg`);
-            if (fs.existsSync(imagePath)) {
-              fs.unlinkSync(imagePath);
-              console.log(`${colors.cyan}🗑️ Fichier image supprimé après restauration${colors.reset}`);
-            }
-            
-            return;
-          }
-
-          const messageType = Object.keys(msg.message)[0];
-
-          if (messageType === "protocolMessage") {
-            return;
-          }
-
-          const from = msg.key.remoteJid;
-          const sender = msg.key.participant || msg.key.remoteJid;
-          const isOwnerMsg = isOwner(sender);
-          const isAdminMsg = await isAdminInGroup(sock, from, sender);
-
-          if (!msg.key.fromMe) {
-            console.log(`${colors.cyan}📥 NOUVEAU MESSAGE REÇU de ${sender} ${isOwnerMsg ? '(OWNER)' : ''} ${isAdminMsg ? '(ADMIN)' : ''}${colors.reset}`);
-            console.log(`${colors.yellow}🔍 Type de message: ${messageType}${colors.reset}`);
-          }
-
-          let body = "";
-          if (messageType === "conversation") {
-            body = msg.message.conversation;
-          } else if (messageType === "extendedTextMessage") {
-            body = msg.message.extendedTextMessage.text;
-          } else if (messageType === "imageMessage") {
-            body = msg.message.imageMessage?.caption || "";
-          } else if (messageType === "videoMessage") {
-            body = msg.message.videoMessage?.caption || "";
-          } else if (messageType === "audioMessage") {
-            body = msg.message.audioMessage?.caption || "";
-          } else {
-            return;
-          }
-
-          // 🚫 ANTI-LINK AMÉLIORÉ
-          if (antiLink && body) {
-            const linkRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
-            const hasLink = linkRegex.test(body);
-            
-            if (hasLink && !isOwnerMsg && !isAdminMsg) {
-              console.log(`${colors.red}🚫 LIEN DÉTECTÉ par ${sender} (non-admin)${colors.reset}`);
-              
-              const now = Date.now();
-              const lastWarn = antiLinkCooldown.get(from) || 0;
-              
-              if (now - lastWarn > 60000) {
-                antiLinkCooldown.set(from, now);
-                
-                await sock.sendMessage(from, {
-                  text: `*⚠️ ATTENTION*\nLes liens ne sont pas autorisés dans ce groupe!`
-                });
-                
-                try {
-                  await sock.sendMessage(from, {
-                    delete: msg.key
-                  });
-                } catch (deleteError) {
-                  console.log(`${colors.yellow}⚠️ Impossible de supprimer le message: ${deleteError.message}${colors.reset}`);
+                // 🚫 ANTI-LINK AMÉLIORÉ
+                if (antiLinkEnabled && body) {
+                    const linkRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+                    const hasLink = linkRegex.test(body);
+                    
+                    if (hasLink && !isOwnerMsg && !isAdminMsg) {
+                        console.log(`${colors.red}🚫 LIEN DÉTECTÉ par ${sender} (non-admin)${colors.reset}`);
+                        
+                        const now = Date.now();
+                        const lastWarn = antiLinkCooldown.get(from) || 0;
+                        
+                        if (now - lastWarn > 60000) {
+                            antiLinkCooldown.set(from, now);
+                            
+                            await sock.sendMessage(from, {
+                                text: `*⚠️ ATTENTION*\nLes liens ne sont pas autorisés dans ce groupe!`
+                            });
+                            
+                            try {
+                                await sock.sendMessage(from, {
+                                    delete: msg.key
+                                });
+                            } catch (deleteError) {
+                                console.log(`${colors.yellow}⚠️ Impossible de supprimer le message: ${deleteError.message}${colors.reset}`);
+                            }
+                        }
+                        return;
+                    } else if (hasLink && (isOwnerMsg || isAdminMsg)) {
+                        console.log(`${colors.green}🔗 Lien autorisé de ${isOwnerMsg ? 'OWNER' : 'ADMIN'}${colors.reset}`);
+                    }
                 }
-              }
-              return;
-            } else if (hasLink && (isOwnerMsg || isAdminMsg)) {
-              console.log(`${colors.green}🔗 Lien autorisé de ${isOwnerMsg ? 'OWNER' : 'ADMIN'}${colors.reset}`);
-            }
-          }
 
-          const linkRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
-          const containsLink = linkRegex.test(body);
+                const linkRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+                const containsLink = linkRegex.test(body);
 
-          if (containsLink && !isOwnerMsg && !isAdminMsg) {
-            console.log(`${colors.yellow}⚠️ Message avec lien détecté (non-admin), non sauvegardé: ${msg.key.id}${colors.reset}`);
-            return;
-          }
-
-          // SAUVEGARDE DU MESSAGE (seulement si restauration activée)
-          if (restoreMessages || restoreImages) {
-            const savedMsg = {
-              key: msg.key,
-              message: msg.message,
-              pushName: msg.pushName || sender,
-              timestamp: Date.now(),
-              messageType: messageType
-            };
-
-            messageStore.set(msg.key.id, savedMsg);
-            console.log(`${colors.green}✅ Message sauvegardé en mémoire: ${msg.key.id.substring(0, 8)}...${colors.reset}`);
-
-            const filePath = path.join(DELETED_MESSAGES_FOLDER, `${msg.key.id}.json`);
-            fs.writeFileSync(filePath, JSON.stringify(savedMsg, null, 2));
-            console.log(`${colors.green}✅ Message sauvegardé sur disque: ${msg.key.id.substring(0, 8)}.json${colors.reset}`);
-
-            if (messageType === 'imageMessage' && restoreImages) {
-              try {
-                console.log(`${colors.cyan}🖼️ Sauvegarde de l'image...${colors.reset}`);
-                
-                const imageMsg = msg.message.imageMessage;
-                const stream = await downloadContentFromMessage(imageMsg, 'image');
-                let buffer = Buffer.from([]);
-                
-                for await (const chunk of stream) {
-                  buffer = Buffer.concat([buffer, chunk]);
+                if (containsLink && !isOwnerMsg && !isAdminMsg) {
+                    console.log(`${colors.yellow}⚠️ Message avec lien détecté (non-admin), non sauvegardé: ${msg.key.id}${colors.reset}`);
+                    return;
                 }
-                
-                const imagePath = path.join(DELETED_IMAGES_FOLDER, `${msg.key.id}.jpg`);
-                fs.writeFileSync(imagePath, buffer);
-                
-                console.log(`${colors.green}✅ Image sauvegardée: ${msg.key.id}.jpg${colors.reset}`);
-                
-                savedMsg.imagePath = imagePath;
-                fs.writeFileSync(filePath, JSON.stringify(savedMsg, null, 2));
-                
-              } catch (imageError) {
-                console.log(`${colors.yellow}⚠️ Erreur sauvegarde image: ${imageError.message}${colors.reset}`);
-              }
-            }
-          }
 
-          // 🎯 COMMANDES DE TEST
-          if (body === "!ping") {
-            console.log(`${colors.green}🏓 Commande ping reçue de ${sender}${colors.reset}`);
-            
-            await sendFormattedMessage(sock, from, `✅ *PONG!*\n\n🤖 HEXGATE V3 en ligne!\n📊 Status: Actif\n🔓 Mode: ${botPublic ? 'Public' : 'Privé'}\n👤 Utilisateur: ${msg.pushName || "Inconnu"}\n📅 Heure: ${new Date().toLocaleTimeString()}`, msg);
-            continue;
-          }
+                // SAUVEGARDE DU MESSAGE
+                if (deleteRestoreEnabled || imageSaveEnabled) {
+                    const savedMsg = {
+                        key: msg.key,
+                        message: msg.message,
+                        pushName: msg.pushName || sender,
+                        timestamp: Date.now(),
+                        messageType: messageType
+                    };
 
-          // 💬 TRAITEMENT DES COMMANDES AVEC PREFIX
-          if (body.startsWith(prefix)) {
-            const args = body.slice(prefix.length).trim().split(/ +/);
-            const command = args.shift().toLowerCase();
-            
-            console.log(`${colors.cyan}🎯 Commande détectée: ${command} par ${sender} ${isOwnerMsg ? '(OWNER)' : ''}${colors.reset}`);
-            
-            const context = {
-              isOwner: isOwnerMsg,
-              sender,
-              prefix: prefix,
-              botPublic: botPublic || isOwnerMsg
-            };
-            
-            if (botPublic || isOwnerMsg) {
-              await commandHandler.execute(command, sock, msg, args, context);
-            } else {
-              console.log(`${colors.yellow}⚠️ Commande ignorée (mode privé): ${command} par ${sender}${colors.reset}`);
-            }
-            continue;
-          }
+                    if (deleteRestoreEnabled) {
+                        messageStore.set(msg.key.id, savedMsg);
+                        console.log(`${colors.green}✅ Message sauvegardé en mémoire: ${msg.key.id.substring(0, 8)}...${colors.reset}`);
+                    }
 
-          // 🔧 COMMANDES PROPRIÉTAIRE
-          if (isOwnerMsg) {
-            if (body === prefix + "public") {
-              botPublic = true;
-              config.botPublic = true;
-              fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-              
-              await sendFormattedMessage(sock, OWNER_NUMBER, `✅ *BOT PASSÉ EN MODE PUBLIC*\n\nTous les utilisateurs peuvent maintenant utiliser les commandes.\n\n📊 Commandes disponibles: ${commandHandler.getCommandList().length}`, msg);
-              console.log(`${colors.green}🔓 Mode public activé${colors.reset}`);
-              continue;
+                    if (deleteRestoreEnabled) {
+                        const filePath = path.join(DELETED_MESSAGES_FOLDER, `${msg.key.id}.json`);
+                        fs.writeFileSync(filePath, JSON.stringify(savedMsg, null, 2));
+                        console.log(`${colors.green}✅ Message sauvegardé sur disque: ${msg.key.id.substring(0, 8)}.json${colors.reset}`);
+                    }
+
+                    if (imageSaveEnabled && messageType === 'imageMessage') {
+                        try {
+                            console.log(`${colors.cyan}🖼️ Sauvegarde de l'image...${colors.reset}`);
+                            
+                            const imageMsg = msg.message.imageMessage;
+                            const stream = await downloadContentFromMessage(imageMsg, 'image');
+                            let buffer = Buffer.from([]);
+                            
+                            for await (const chunk of stream) {
+                                buffer = Buffer.concat([buffer, chunk]);
+                            }
+                            
+                            const imagePath = path.join(DELETED_IMAGES_FOLDER, `${msg.key.id}.jpg`);
+                            fs.writeFileSync(imagePath, buffer);
+                            
+                            console.log(`${colors.green}✅ Image sauvegardée: ${msg.key.id}.jpg${colors.reset}`);
+                            
+                            savedMsg.imagePath = imagePath;
+                            if (deleteRestoreEnabled) {
+                                const filePath = path.join(DELETED_MESSAGES_FOLDER, `${msg.key.id}.json`);
+                                fs.writeFileSync(filePath, JSON.stringify(savedMsg, null, 2));
+                            }
+                            
+                        } catch (imageError) {
+                            console.log(`${colors.yellow}⚠️ Erreur sauvegarde image: ${imageError.message}${colors.reset}`);
+                        }
+                    }
+                }
+
+                // 🎯 COMMANDES AVEC PREFIX
+                if (body.startsWith(prefix)) {
+                    const args = body.slice(prefix.length).trim().split(/ +/);
+                    const command = args.shift().toLowerCase();
+                    
+                    console.log(`${colors.cyan}🎯 Commande détectée: ${command} par ${sender} ${isOwnerMsg ? '(OWNER)' : ''}${colors.reset}`);
+                    
+                    const context = {
+                      isOwner: isOwnerMsg,
+                      sender,
+                      prefix: prefix,
+                      botPublic: botPublic || isOwnerMsg
+                    };
+                    
+                    if (botPublic || isOwnerMsg) {
+                      await commandHandler.execute(command, sock, msg, args, context);
+                    } else {
+                      console.log(`${colors.yellow}⚠️ Commande ignorée (mode privé): ${command} par ${sender}${colors.reset}`);
+                    }
+                    continue;
+                }
+
+                // 🔧 COMMANDES PROPRIÉTAIRE
+                if (isOwnerMsg) {
+                    // ============================================
+                    // COMMANDES ON/OFF POUR LES FONCTIONNALITÉS
+                    // ============================================
+                    
+                    if (body === prefix + "antilink on") {
+                        antiLinkEnabled = true;
+                        await sock.sendMessage(msg.key.remoteJid, { 
+                            text: '✅ Anti-link activé ! Les liens seront bloqués pour les non-admins.' 
+                        });
+                        continue;
+                    }
+                    
+                    if (body === prefix + "antilink off") {
+                        antiLinkEnabled = false;
+                        await sock.sendMessage(msg.key.remoteJid, { 
+                            text: '❌ Anti-link désactivé ! Les liens ne seront plus bloqués.' 
+                        });
+                        continue;
+                    }
+                    
+                    if (body === prefix + "restore on") {
+                        deleteRestoreEnabled = true;
+                        await sock.sendMessage(msg.key.remoteJid, { 
+                            text: '✅ Restauration des messages activée ! Les messages supprimés seront restaurés.' 
+                        });
+                        continue;
+                    }
+                    
+                    if (body === prefix + "restore off") {
+                        deleteRestoreEnabled = false;
+                        await sock.sendMessage(msg.key.remoteJid, { 
+                            text: '❌ Restauration des messages désactivée !' 
+                        });
+                        continue;
+                    }
+                    
+                    if (body === prefix + "imagesave on") {
+                        imageSaveEnabled = true;
+                        await sock.sendMessage(msg.key.remoteJid, { 
+                            text: '✅ Sauvegarde des images activée ! Les images seront sauvegardées.' 
+                        });
+                        continue;
+                    }
+                    
+                    if (body === prefix + "imagesave off") {
+                        imageSaveEnabled = false;
+                        await sock.sendMessage(msg.key.remoteJid, { 
+                            text: '❌ Sauvegarde des images désactivée !' 
+                        });
+                        continue;
+                    }
+                    
+                    if (body === prefix + "features") {
+                        await sock.sendMessage(msg.key.remoteJid, { 
+                            text: `*⚙️ ÉTAT DES FONCTIONNALITÉS*\n\n` +
+                                  `🔗 *Anti-link:* ${antiLinkEnabled ? '✅ ON' : '❌ OFF'}\n` +
+                                  `🗑️ *Restauration messages:* ${deleteRestoreEnabled ? '✅ ON' : '❌ OFF'}\n` +
+                                  `🖼️ *Sauvegarde images:* ${imageSaveEnabled ? '✅ ON' : '❌ OFF'}\n\n` +
+                                  `*Commandes:*\n` +
+                                  `• ${prefix}antilink on/off\n` +
+                                  `• ${prefix}restore on/off\n` +
+                                  `• ${prefix}imagesave on/off\n` +
+                                  `• ${prefix}features (voir cet état)`
+                        });
+                        continue;
+                    }
+                    
+                    // ============================================
+                    // AUTRES COMMANDES PROPRIÉTAIRE
+                    // ============================================
+                    
+                    if (body === prefix + "public") {
+                        botPublic = true;
+                        config.botPublic = true;
+                        fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
+                        
+                        await sendFormattedMessage(sock, OWNER_NUMBER, `✅ *BOT PASSÉ EN MODE PUBLIC*\n\nTous les utilisateurs peuvent maintenant utiliser les commandes.\n\n📊 Commandes disponibles: ${commandHandler.getCommandList().length}`);
+                        console.log(`${colors.green}🔓 Mode public activé${colors.reset}`);
+                        continue;
+                    }
+                    
+                    if (body === prefix + "private") {
+                        botPublic = false;
+                        config.botPublic = false;
+                        fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
+                        
+                        await sendFormattedMessage(sock, OWNER_NUMBER, `🔒 *BOT PASSÉ EN MODE PRIVÉ*\n\nSeul le propriétaire peut utiliser les commandes.`);
+                        console.log(`${colors.green}🔒 Mode privé activé${colors.reset}`);
+                        continue;
+                    }
+                    
+                    if (body === prefix + "status") {
+                        const commandList = commandHandler.getCommandList();
+                        const commandsText = commandList.slice(0, 10).map(cmd => `• ${prefix}${cmd}`).join('\n');
+                        const moreCommands = commandList.length > 10 ? `\n... et ${commandList.length - 10} autres` : '';
+                        
+                        await sendFormattedMessage(sock, OWNER_NUMBER, `📊 *STATUS DU BOT*\n\n🏷️ Nom: HEXGATE V3\n🔓 Mode: ${botPublic ? 'Public' : 'Privé'}\n📊 Commandes: ${commandList.length}\n💾 Messages sauvegardés: ${messageStore.size}\n🖼️ Images sauvegardées: ${fs.readdirSync(DELETED_IMAGES_FOLDER).length}\n⏰ Uptime: ${process.uptime().toFixed(0)}s\n\n📋 Commandes disponibles:\n${commandsText}${moreCommands}`);
+                        continue;
+                    }
+                    
+                    if (body === prefix + "recording on") {
+                        // Commenté car fakerecording est supprimé
+                        await sock.sendMessage(OWNER_NUMBER, `🎤 *FAKE RECORDING NON DISPONIBLE*\n\nCette fonctionnalité a été supprimée.`);
+                        console.log(`${colors.yellow}⚠️ Fake recording désactivé (supprimé)${colors.reset}`);
+                        continue;
+                    }
+                    
+                    if (body === prefix + "recording off") {
+                        // Commenté car fakerecording est supprimé
+                        await sock.sendMessage(OWNER_NUMBER, `🎤 *FAKE RECORDING NON DISPONIBLE*\n\nCette fonctionnalité a été supprimée.`);
+                        console.log(`${colors.yellow}⚠️ Fake recording désactivé (supprimé)${colors.reset}`);
+                        continue;
+                    }
+                    
+                    if (body === prefix + "restore") {
+                        const deletedCount = fs.readdirSync(DELETED_MESSAGES_FOLDER).length;
+                        const imageCount = fs.readdirSync(DELETED_IMAGES_FOLDER).length;
+                        
+                        await sendFormattedMessage(sock, OWNER_NUMBER, `🔄 *STATUS RESTAURATION*\n\n📊 Messages sauvegardés: ${deletedCount}\n🖼️ Images sauvegardées: ${imageCount}\n💾 En mémoire: ${messageStore.size}\n\n✅ Système de restauration actif!`);
+                        continue;
+                    }
+                    
+                    if (body === prefix + "help") {
+                        await sendFormattedMessage(sock, OWNER_NUMBER, `🛠️ *COMMANDES PROPRIÉTAIRE*\n\n• ${prefix}public - Mode public\n• ${prefix}private - Mode privé\n• ${prefix}status - Statut du bot\n• ${prefix}restore - Status restauration\n• ${prefix}help - Cette aide\n• ${prefix}menu - Liste des commandes\n\n🎯 Prefix actuel: "${prefix}"\n👑 Propriétaire: ${config.ownerNumber}`);
+                        continue;
+                    }
+                }
             }
-            
-            if (body === prefix + "private") {
-              botPublic = false;
-              config.botPublic = false;
-              fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-              
-              await sendFormattedMessage(sock, OWNER_NUMBER, `🔒 *BOT PASSÉ EN MODE PRIVÉ*\n\nSeul le propriétaire peut utiliser les commandes.`, msg);
-              console.log(`${colors.green}🔒 Mode privé activé${colors.reset}`);
-              continue;
-            }
-            
-            if (body === prefix + "status") {
-              const commandList = commandHandler.getCommandList();
-              const commandsText = commandList.slice(0, 10).map(cmd => `• ${prefix}${cmd}`).join('\n');
-              const moreCommands = commandList.length > 10 ? `\n... et ${commandList.length - 10} autres` : '';
-              
-              const statusText = `📊 *STATUS DU BOT*\n\n🏷️ Nom: HEXGATE V3\n🔓 Mode: ${botPublic ? 'Public' : 'Privé'}\n🎤 Fake Recording: ${fakeRecording ? 'ACTIVÉ' : 'DÉSACTIVÉ'}\n🔄 Restauration Messages: ${restoreMessages ? 'ACTIVÉ' : 'DÉSACTIVÉ'}\n🖼️ Restauration Images: ${restoreImages ? 'ACTIVÉ' : 'DÉSACTIVÉ'}\n📊 Commandes: ${commandList.length}\n💾 Messages sauvegardés: ${messageStore.size}\n🖼️ Images sauvegardées: ${fs.readdirSync(DELETED_IMAGES_FOLDER).length}\n⏰ Uptime: ${process.uptime().toFixed(0)}s\n\n📋 Commandes disponibles:\n${commandsText}${moreCommands}`;
-              
-              await sendFormattedMessage(sock, OWNER_NUMBER, statusText, msg);
-              continue;
-            }
-            
-            if (body === prefix + "recording on") {
-              fakeRecording = true;
-              config.fakeRecording = true;
-              fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-              
-              await sendFormattedMessage(sock, OWNER_NUMBER, `🎤 *FAKE RECORDING ACTIVÉ*\n\nLe bot simule maintenant un enregistrement vocal à chaque message reçu.`, msg);
-              console.log(`${colors.green}🎤 Fake recording activé${colors.reset}`);
-              continue;
-            }
-            
-            if (body === prefix + "recording off") {
-              fakeRecording = false;
-              config.fakeRecording = false;
-              fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-              
-              await sendFormattedMessage(sock, OWNER_NUMBER, `🎤 *FAKE RECORDING DÉSACTIVÉ*\n\nLe bot ne simule plus d'enregistrement vocal.`, msg);
-              console.log(`${colors.green}🎤 Fake recording désactivé${colors.reset}`);
-              continue;
-            }
-            
-            if (body === prefix + "restore on") {
-              restoreMessages = true;
-              restoreImages = true;
-              config.restoreMessages = true;
-              config.restoreImages = true;
-              fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-              
-              await sendFormattedMessage(sock, OWNER_NUMBER, `🔄 *RESTAURATION ACTIVÉE*\n\n✅ Restauration des messages: ACTIVÉ\n✅ Restauration des images: ACTIVÉ`, msg);
-              console.log(`${colors.green}🔄 Restauration activée${colors.reset}`);
-              continue;
-            }
-            
-            if (body === prefix + "restore off") {
-              restoreMessages = false;
-              restoreImages = false;
-              config.restoreMessages = false;
-              config.restoreImages = false;
-              fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-              
-              await sendFormattedMessage(sock, OWNER_NUMBER, `🔒 *RESTAURATION DÉSACTIVÉE*\n\n❌ Restauration des messages: DÉSACTIVÉ\n❌ Restauration des images: DÉSACTIVÉ`, msg);
-              console.log(`${colors.green}🔒 Restauration désactivée${colors.reset}`);
-              continue;
-            }
-            
-            if (body === prefix + "help") {
-              const ownerHelp = `🛠️ *COMMANDES PROPRIÉTAIRE*\n\n• ${prefix}public - Mode public\n• ${prefix}private - Mode privé\n• ${prefix}status - Statut du bot\n• ${prefix}recording on/off - Fake recording\n• ${prefix}restore on/off - Activation/désactivation restauration\n• ${prefix}restore messages on/off - Messages seulement\n• ${prefix}restore images on/off - Images seulement\n• ${prefix}help - Cette aide\n• ${prefix}menu - Liste des commandes\n\n🎯 Prefix actuel: "${prefix}"\n👑 Propriétaire: ${config.ownerNumber}`;
-              
-              await sendFormattedMessage(sock, OWNER_NUMBER, ownerHelp, msg);
-              continue;
-            }
-          }
+        } catch (error) {
+            console.error(`${colors.red}❌ Erreur dans le traitement des messages: ${error.message}${colors.reset}`);
         }
-      } catch (error) {
-        console.log(`${colors.red}❌ Erreur traitement message: ${error.message}${colors.reset}`);
-      }
     });
 
     // 🎭 GESTION DES RÉACTIONS
@@ -2004,112 +1875,82 @@ ${colors.reset}`, (phone) => {
       }
     });
 
-    // 🚀 INTERFACE CONSOLE
-    rl.on("line", async (input) => {
-      const args = input.trim().split(/ +/);
-      const command = args.shift().toLowerCase();
-      
-      switch (command) {
-        case "public":
-          botPublic = true;
-          config.botPublic = true;
-          fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-          console.log(`${colors.green}✅ Mode public activé${colors.reset}`);
-          break;
-          
-        case "private":
-          botPublic = false;
-          config.botPublic = false;
-          fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-          console.log(`${colors.green}✅ Mode privé activé${colors.reset}`);
-          break;
-          
-        case "recording":
-          const state = args[0];
-          if (state === "on") {
-            fakeRecording = true;
-            config.fakeRecording = true;
+    // 🚀 INTERFACE CONSOLE - MODIFIÉ POUR NE PAS UTILISER readline DANS LE MODE SERVEUR
+    // Créer rl seulement si on n'est pas dans un environnement serveur
+    if (process.env.NODE_ENV !== 'production' && process.stdout.isTTY) {
+      rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+
+      rl.on("line", async (input) => {
+        const args = input.trim().split(/ +/);
+        const command = args.shift().toLowerCase();
+        
+        switch (command) {
+          case "public":
+            botPublic = true;
+            config.botPublic = true;
             fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-            console.log(`${colors.green}✅ Fake recording activé${colors.reset}`);
-          } else if (state === "off") {
-            fakeRecording = false;
-            config.fakeRecording = false;
+            console.log(`${colors.green}✅ Mode public activé${colors.reset}`);
+            break;
+            
+          case "private":
+            botPublic = false;
+            config.botPublic = false;
             fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-            console.log(`${colors.green}✅ Fake recording désactivé${colors.reset}`);
-          }
-          break;
-          
-        case "restore":
-          const restoreState = args[0];
-          if (restoreState === "on") {
-            restoreMessages = true;
-            restoreImages = true;
-            config.restoreMessages = true;
-            config.restoreImages = true;
-            fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-            console.log(`${colors.green}✅ Restauration activée${colors.reset}`);
-          } else if (restoreState === "off") {
-            restoreMessages = false;
-            restoreImages = false;
-            config.restoreMessages = false;
-            config.restoreImages = false;
-            fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-            console.log(`${colors.green}✅ Restauration désactivée${colors.reset}`);
-          }
-          break;
-          
-        case "reload":
-          commandHandler.reloadCommands();
-          break;
-          
-        case "status":
-          console.log(`${colors.cyan}📊 STATUT DU BOT${colors.reset}`);
-          console.log(`${colors.yellow}• Mode: ${botPublic ? 'PUBLIC' : 'PRIVÉ'}${colors.reset}`);
-          console.log(`${colors.yellow}• Fake Recording: ${fakeRecording ? 'ACTIVÉ' : 'DÉSACTIVÉ'}${colors.reset}`);
-          console.log(`${colors.yellow}• Restauration Messages: ${restoreMessages ? 'ACTIVÉ' : 'DÉSACTIVÉ'}${colors.reset}`);
-          console.log(`${colors.yellow}• Restauration Images: ${restoreImages ? 'ACTIVÉ' : 'DÉSACTIVÉ'}${colors.reset}`);
-          console.log(`${colors.yellow}• Commandes chargées: ${commandHandler.getCommandList().length}${colors.reset}`);
-          console.log(`${colors.yellow}• Messages en mémoire: ${messageStore.size}${colors.reset}`);
-          console.log(`${colors.yellow}• Images sauvegardées: ${fs.readdirSync(DELETED_IMAGES_FOLDER).length}${colors.reset}`);
-          console.log(`${colors.yellow}• Prefix: "${prefix}"${colors.reset}`);
-          console.log(`${colors.yellow}• Propriétaire: ${config.ownerNumber}${colors.reset}`);
-          console.log(`${colors.yellow}• Bot prêt pour API: ${botReady ? 'OUI' : 'NON'}${colors.reset}`);
-          break;
-          
-        case "clear":
-          console.clear();
-          displayBanner();
-          break;
-          
-        case "prefix":
-          if (args[0]) {
-            config.prefix = args[0];
-            fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
-            console.log(`${colors.green}✅ Nouveau prefix: "${config.prefix}"${colors.reset}`);
-          } else {
-            console.log(`${colors.yellow}⚠️ Usage: prefix [nouveau_prefix]${colors.reset}`);
-          }
-          break;
-          
-        case "exit":
-          console.log(`${colors.yellow}👋 Arrêt du bot...${colors.reset}`);
-          rl.close();
-          process.exit(0);
-          break;
-          
-        default:
-          console.log(`${colors.yellow}⚠️ Commandes console disponibles:${colors.reset}`);
-          console.log(`${colors.cyan}  • public - Mode public${colors.reset}`);
-          console.log(`${colors.cyan}  • private - Mode privé${colors.reset}`);
-          console.log(`${colors.cyan}  • recording on/off - Fake recording${colors.reset}`);
-          console.log(`${colors.cyan}  • restore on/off - Restauration messages/images${colors.reset}`);
-          console.log(`${colors.cyan}  • reload - Recharger commandes${colors.reset}`);
-          console.log(`${colors.cyan}  • status - Afficher statut${colors.reset}`);
-          console.log(`${colors.cyan}  • prefix [x] - Changer prefix${colors.reset}`);
-          console.log(`${colors.cyan}  • clear - Nettoyer console${colors.reset}`);
-          console.log(`${colors.cyan}  • exit - Quitter${colors.reset}`);
-      }
-    });
+            console.log(`${colors.green}✅ Mode privé activé${colors.reset}`);
+            break;
+            
+          case "reload":
+            commandHandler.reloadCommands();
+            break;
+            
+          case "status":
+            console.log(`${colors.cyan}📊 STATUT DU BOT${colors.reset}`);
+            console.log(`${colors.yellow}• Mode: ${botPublic ? 'PUBLIC' : 'PRIVÉ'}${colors.reset}`);
+            console.log(`${colors.yellow}• Commandes chargées: ${commandHandler.getCommandList().length}${colors.reset}`);
+            console.log(`${colors.yellow}• Messages en mémoire: ${messageStore.size}${colors.reset}`);
+            console.log(`${colors.yellow}• Images sauvegardées: ${fs.readdirSync(DELETED_IMAGES_FOLDER).length}${colors.reset}`);
+            console.log(`${colors.yellow}• Prefix: "${prefix}"${colors.reset}`);
+            console.log(`${colors.yellow}• Propriétaire: ${config.ownerNumber}${colors.reset}`);
+            console.log(`${colors.yellow}• Telegram: ${telegramLink}${colors.reset}`);
+            console.log(`${colors.yellow}• Bot prêt pour API: ${botReady ? 'OUI' : 'NON'}${colors.reset}`);
+            break;
+            
+          case "clear":
+            console.clear();
+            displayBanner();
+            break;
+            
+          case "prefix":
+            if (args[0]) {
+              config.prefix = args[0];
+              fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
+              console.log(`${colors.green}✅ Nouveau prefix: "${config.prefix}"${colors.reset}`);
+            } else {
+              console.log(`${colors.yellow}⚠️ Usage: prefix [nouveau_prefix]${colors.reset}`);
+            }
+            break;
+            
+          case "exit":
+            console.log(`${colors.yellow}👋 Arrêt du bot...${colors.reset}`);
+            if (rl) rl.close();
+            process.exit(0);
+            break;
+            
+          default:
+            console.log(`${colors.yellow}⚠️ Commandes console disponibles:${colors.reset}`);
+            console.log(`${colors.cyan}  • public - Mode public${colors.reset}`);
+            console.log(`${colors.cyan}  • private - Mode privé${colors.reset}`);
+            console.log(`${colors.cyan}  • reload - Recharger commandes${colors.reset}`);
+            console.log(`${colors.cyan}  • status - Afficher statut${colors.reset}`);
+            console.log(`${colors.cyan}  • prefix [x] - Changer prefix${colors.reset}`);
+            console.log(`${colors.cyan}  • clear - Nettoyer console${colors.reset}`);
+            console.log(`${colors.cyan}  • exit - Quitter${colors.reset}`);
+        }
+      });
+    }
 
   } catch (error) {
     console.log(`${colors.red}❌ Erreur démarrage bot: ${error.message}${colors.reset}`);
@@ -2119,17 +1960,54 @@ ${colors.reset}`, (phone) => {
 }
 
 // ============================================
-// 🚀 DÉMARRAGE
+// 🚀 DÉMARRAGE - MODIFIÉ POUR NE PAS DÉMARRER AUTOMATIQUEMENT
 // ============================================
-console.log(`${colors.magenta}🚀 Démarrage de HEXGATE V3...${colors.reset}`);
-startBot();
+console.log(`${colors.magenta}🚀 HEXGATE V3 initialisé...${colors.reset}`);
+
+// Fonction pour démarrer manuellement le bot
+async function startBotManually() {
+  try {
+    console.log(`${colors.cyan}🤖 Démarrage manuel du bot...${colors.reset}`);
+    await startBot();
+    return true;
+  } catch (error) {
+    console.log(`${colors.red}❌ Erreur démarrage manuel: ${error.message}${colors.reset}`);
+    return false;
+  }
+}
+
+// Fonction pour arrêter le bot proprement
+async function stopBot() {
+  try {
+    if (sock) {
+      await sock.end();
+      console.log(`${colors.green}✅ Bot arrêté proprement${colors.reset}`);
+    }
+    botReady = false;
+    sock = null;
+    return true;
+  } catch (error) {
+    console.log(`${colors.red}❌ Erreur arrêt bot: ${error.message}${colors.reset}`);
+    return false;
+  }
+}
 
 // ============================================
-// 📦 EXPORTS POUR L'API
+// 📦 EXPORTS POUR L'API - AJOUT DES FONCTIONS DE GESTION
 // ============================================
-export {
-  sock as bot,
+module.exports = {
+  bot: sock,
   generatePairCode,
   isBotReady,
-  config
+  config,
+  startBot: startBotManually, // Export de la fonction de démarrage manuel
+  stopBot: stopBot, // Export de la fonction d'arrêt
+  getCommandHandler: () => commandHandler // Export du gestionnaire de commandes
 };
+
+// NE PAS DÉMARRER AUTOMATIQUEMENT - Laissé au serveur web
+// Démarrage conditionnel uniquement si lancé directement
+if (require.main === module) {
+  console.log(`${colors.magenta}🚀 Démarrage de HEXGATE V3 en mode standalone...${colors.reset}`);
+  startBot();
+}
