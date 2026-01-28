@@ -1,129 +1,20 @@
-# render.yaml - Configuration robuste pour HEXGATE WhatsApp
 services:
   - type: web
-    name: hexgate-whatsapp
+    name: hexgate-v3
     env: node
-    plan: free
-    region: frankfurt
-    buildCommand: |
-      echo "╔══════════════════════════════════════╗"
-      echo "║   🛠️  HEXGATE BUILD PROCESS           ║"
-      echo "╚══════════════════════════════════════╝"
-      echo ""
-      echo "📦 Étape 1: Nettoyage..."
-      rm -rf node_modules || true
-      rm -f package-lock.json || true
-      
-      echo "📦 Étape 2: Installation des dépendances de base..."
-      npm install express@4.18.2 cors@2.8.5 body-parser@1.20.2 chalk@5.3.0 --no-save --legacy-peer-deps
-      
-      echo "📦 Étape 3: Tentative d'installation de Baileys..."
-      if npm install @whiskeysockets/baileys@6.4.0 --no-save --legacy-peer-deps 2>/dev/null; then
-        echo "✅ Baileys installé avec succès"
-      else
-        echo "⚠️  Baileys échoué, installation alternative..."
-        npm install https://registry.npmjs.org/@whiskeysockets/baileys/-/baileys-6.4.0.tgz --no-save --legacy-peer-deps || true
-      fi
-      
-      echo "📦 Étape 4: Installation de pino..."
-      npm install pino@8.15.4 --no-save --legacy-peer-deps || true
-      
-      echo "📦 Étape 5: Installation des dépendances restantes..."
-      npm install dotenv@16.3.1 fs-extra@11.1.1 --no-save --legacy-peer-deps
-      
-      echo ""
-      echo "✅ Construction terminée avec succès!"
-      echo ""
-      
-    startCommand: |
-      echo "╔══════════════════════════════════════╗"
-      echo "║   🚀  HEXGATE WHATSAPP SERVER        ║"
-      echo "╚══════════════════════════════════════╝"
-      echo ""
-      echo "📊 Environnement:"
-      echo "   PORT: $PORT"
-      echo "   NODE_ENV: production"
-      echo "   REGION: frankfurt"
-      echo ""
-      echo "🔍 Vérification des dépendances..."
-      node -e "
-        try {
-          require('express');
-          console.log('✅ Express: OK');
-        } catch(e) { console.log('❌ Express: MANQUANT'); }
-        
-        try {
-          require('@whiskeysockets/baileys');
-          console.log('✅ Baileys: OK');
-        } catch(e) { 
-          console.log('⚠️  Baileys: NON DISPONIBLE');
-          console.log('   Mode démo activé');
-        }
-        
-        try {
-          require('pino');
-          console.log('✅ Pino: OK');
-        } catch(e) { console.log('⚠️  Pino: NON DISPONIBLE'); }
-      "
-      echo ""
-      echo "🌍 Démarrage du serveur..."
-      node server.js
-    
-    healthCheckPath: /health
-    autoDeploy: true
-    
-    # Redémarrage automatique en cas de crash
-    restartPolicyType: ON_FAILURE
-    restartPolicyMaxRetries: 10
-    
-    # Ressources
-    disk:
-      name: sessions
-      mountPath: /opt/render/project/src/sessions
-      sizeGB: 1
-    
-    # Variables d'environnement
+    buildCommand: npm install
+    startCommand: npm start
     envVars:
-      - key: NODE_VERSION
-        value: 20.11.0
       - key: NODE_ENV
         value: production
-      - key: DISABLE_RENDER_AUTO_INSTALL
-        value: "true"
-      - key: RENDER
-        value: "true"
       - key: PORT
-        value: 3000
-      - key: SESSIONS_DIR
-        value: /opt/render/project/src/sessions
-      - key: MAX_SESSIONS
-        value: "10"
-      - key: SESSION_TIMEOUT_MINUTES
-        value: "480"
-    
-    # Plan gratuit avec optimisations
-    plan: free
-    numInstances: 1
-    
-    # Domaine personnalisé (optionnel)
-    # domains:
-    #   - hexgate-whatsapp.onrender.com
-    
-    # Headers de sécurité
+        value: 10000
+    healthCheckPath: /health
+    autoDeploy: true
     headers:
-      - path: /*
-        name: X-Content-Type-Options
-        value: nosniff
       - path: /*
         name: X-Frame-Options
         value: DENY
       - path: /*
-        name: X-XSS-Protection
-        value: 1; mode=block
-
-# Volumes persistants (pour les sessions)
-# Note: Non disponible sur le plan gratuit, mais configuré pour l'avenir
-volumes:
-  - name: sessions-volume
-    mountPath: /opt/render/project/src/sessions
-    sizeGB: 1
+        name: X-Content-Type-Options
+        value: nosniff
