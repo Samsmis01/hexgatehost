@@ -1,8 +1,10 @@
 const express = require('express');
 const path = require('path');
-const { bot, generatePairCode, isBotReady, config } = require('./index.js');
+const fs = require('fs');
 
+// Créer l'application Express
 const app = express();
+// Render.com fournit le port via process.env.PORT, sinon utiliser 3000
 const PORT = process.env.PORT || 3000;
 
 // Middleware
@@ -18,17 +20,252 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Page QR code (alternative)
+app.get('/qr', (req, res) => {
+    res.send(`
+        <!DOCTYPE html>
+        <html lang="fr">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>QR Code WhatsApp - LISA MD</title>
+            <style>
+                * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                }
+
+                body {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    padding: 20px;
+                }
+
+                .container {
+                    background: rgba(255, 255, 255, 0.95);
+                    border-radius: 20px;
+                    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+                    width: 100%;
+                    max-width: 500px;
+                    overflow: hidden;
+                    padding: 30px;
+                }
+
+                .header {
+                    background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+                    color: white;
+                    padding: 20px;
+                    text-align: center;
+                    border-radius: 15px;
+                    margin-bottom: 30px;
+                }
+
+                .logo {
+                    width: 60px;
+                    height: 60px;
+                    background: white;
+                    border-radius: 50%;
+                    margin: 0 auto 15px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 28px;
+                    color: #25D366;
+                }
+
+                .title {
+                    font-size: 24px;
+                    font-weight: 700;
+                    margin-bottom: 5px;
+                }
+
+                .subtitle {
+                    font-size: 14px;
+                    opacity: 0.9;
+                    font-weight: 300;
+                }
+
+                .instructions {
+                    background: #f8f9fa;
+                    padding: 20px;
+                    border-radius: 12px;
+                    margin: 20px 0;
+                    border-left: 4px solid #25D366;
+                }
+
+                .instructions h3 {
+                    color: #333;
+                    margin-bottom: 10px;
+                }
+
+                .instructions ol {
+                    margin-left: 20px;
+                    margin-top: 10px;
+                }
+
+                .instructions li {
+                    margin-bottom: 8px;
+                    color: #555;
+                }
+
+                .btn {
+                    display: inline-block;
+                    padding: 15px 30px;
+                    background: linear-gradient(135deg, #25D366 0%, #1DA851 100%);
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 12px;
+                    font-weight: 700;
+                    margin-top: 20px;
+                    transition: all 0.3s;
+                    border: none;
+                    cursor: pointer;
+                    font-size: 16px;
+                    width: 100%;
+                    text-align: center;
+                }
+
+                .btn:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 8px 20px rgba(37, 211, 102, 0.3);
+                }
+
+                .footer {
+                    text-align: center;
+                    margin-top: 30px;
+                    padding-top: 20px;
+                    border-top: 1px solid #eee;
+                    color: #666;
+                    font-size: 12px;
+                }
+
+                .status {
+                    background: #e8f5e9;
+                    padding: 15px;
+                    border-radius: 10px;
+                    margin: 20px 0;
+                    text-align: center;
+                    border: 1px solid #c8e6c9;
+                }
+
+                .status.online {
+                    background: #e8f5e9;
+                    border-color: #c8e6c9;
+                }
+
+                .status.offline {
+                    background: #ffebee;
+                    border-color: #ffcdd2;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <div class="logo">
+                        <i class="fab fa-whatsapp"></i>
+                    </div>
+                    <h1 class="title">LISA MD</h1>
+                    <p class="subtitle">CONNEXION WHATSAPP</p>
+                </div>
+
+                <div class="instructions">
+                    <h3>📱 Instructions de connexion :</h3>
+                    <ol>
+                        <li>Retournez à la page d'accueil</li>
+                        <li>Entrez votre numéro WhatsApp (ex: 243983205767)</li>
+                        <li>Cliquez sur "OBTENIR LE CODE"</li>
+                        <li>Sur WhatsApp mobile : <strong>Paramètres → Périphériques liés → Ajouter un périphérique</strong></li>
+                        <li>Saisissez le code à 6 chiffres généré</li>
+                        <li>Votre compte sera lié au bot automatiquement</li>
+                    </ol>
+                </div>
+
+                <div class="status online" id="serverStatus">
+                    <strong>✅ Serveur en ligne</strong>
+                    <p>Interface web disponible pour la connexion</p>
+                </div>
+
+                <a href="/" class="btn">
+                    <i class="fas fa-arrow-left"></i> RETOUR À L'ACCUEIL
+                </a>
+
+                <div class="footer">
+                    PROPULSÉ PAR SADIYA TECH | HEXGATE V3
+                </div>
+            </div>
+
+            <script>
+                // Vérifier le statut du serveur
+                async function checkServerStatus() {
+                    try {
+                        const response = await fetch('/api/status');
+                        const data = await response.json();
+                        
+                        const statusElement = document.getElementById('serverStatus');
+                        if (data.botReady) {
+                            statusElement.className = 'status online';
+                            statusElement.innerHTML = '<strong>✅ Bot WhatsApp Connecté</strong><p>Prêt à générer des codes de pairing</p>';
+                        } else {
+                            statusElement.className = 'status offline';
+                            statusElement.innerHTML = '<strong>⏳ Bot en démarrage</strong><p>Le bot WhatsApp est en cours de connexion...</p>';
+                        }
+                    } catch (error) {
+                        console.log('Statut non disponible');
+                    }
+                }
+
+                // Vérifier le statut toutes les 10 secondes
+                checkServerStatus();
+                setInterval(checkServerStatus, 10000);
+            </script>
+            <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+        </body>
+        </html>
+    `);
+});
+
 // API pour vérifier le statut du bot
 app.get('/api/status', (req, res) => {
-    res.json({
-        status: 'online',
-        botReady: isBotReady(),
-        botName: 'HEXGATE V3',
-        owner: config.ownerNumber,
-        prefix: config.prefix,
-        public: config.botPublic,
-        uptime: process.uptime()
-    });
+    try {
+        let botReady = false;
+        let config = {};
+        
+        // Essayer de charger le bot
+        try {
+            const botModule = require('./index.js');
+            botReady = botModule.isBotReady ? botModule.isBotReady() : false;
+            config = botModule.config || {};
+        } catch (botError) {
+            console.log('Bot non encore initialisé:', botError.message);
+        }
+        
+        res.json({
+            status: 'online',
+            botReady: botReady,
+            botName: 'HEXGATE V3',
+            owner: config.ownerNumber || '243983205767',
+            prefix: config.prefix || '.',
+            public: config.botPublic || false,
+            uptime: process.uptime(),
+            serverTime: new Date().toISOString(),
+            environment: process.env.NODE_ENV || 'development',
+            port: PORT,
+            renderUrl: process.env.RENDER_EXTERNAL_URL || null
+        });
+    } catch (error) {
+        console.error('Erreur API status:', error);
+        res.status(500).json({
+            status: 'error',
+            error: error.message,
+            serverTime: new Date().toISOString()
+        });
+    }
 });
 
 // API pour générer un code de pairing
@@ -37,90 +274,379 @@ app.post('/api/generate-paircode', async (req, res) => {
         const { phone } = req.body;
         
         if (!phone) {
-            return res.status(400).json({ error: 'Numéro WhatsApp requis' });
+            return res.status(400).json({ 
+                success: false,
+                error: 'Numéro WhatsApp requis' 
+            });
         }
         
         // Nettoyer le numéro
         const cleanPhone = phone.replace(/\D/g, '');
         
         if (cleanPhone.length < 9) {
-            return res.status(400).json({ error: 'Numéro invalide' });
+            return res.status(400).json({ 
+                success: false,
+                error: 'Numéro invalide (minimum 9 chiffres)' 
+            });
         }
         
+        console.log(`📱 Demande de code pour: ${cleanPhone}`);
+        
         // Vérifier si le bot est prêt
-        if (!isBotReady()) {
-            return res.status(503).json({ error: 'Bot non connecté à WhatsApp' });
+        let botModule;
+        try {
+            botModule = require('./index.js');
+        } catch (error) {
+            return res.status(503).json({
+                success: false,
+                error: 'Bot non disponible',
+                message: 'Le bot WhatsApp est en cours de démarrage. Veuillez réessayer dans quelques instants.'
+            });
+        }
+        
+        const { isBotReady, generatePairCode } = botModule;
+        
+        if (!isBotReady || !isBotReady()) {
+            return res.status(503).json({ 
+                success: false,
+                error: 'Bot non connecté à WhatsApp',
+                message: 'Le bot est en cours de connexion à WhatsApp. Veuillez patienter...'
+            });
+        }
+        
+        if (!generatePairCode || typeof generatePairCode !== 'function') {
+            return res.status(500).json({
+                success: false,
+                error: 'Fonction de génération non disponible'
+            });
         }
         
         // Générer le code de pairing
+        console.log(`🔑 Génération du code pour ${cleanPhone}...`);
         const code = await generatePairCode(cleanPhone);
         
         if (!code) {
-            return res.status(500).json({ error: 'Impossible de générer le code' });
+            return res.status(500).json({ 
+                success: false,
+                error: 'Impossible de générer le code',
+                message: 'Assurez-vous que le numéro est valide et que le bot est correctement configuré.'
+            });
         }
         
         // Stocker l'information
         usersDB.set(cleanPhone, {
-            code,
+            code: code,
             timestamp: Date.now(),
-            status: 'pending'
+            status: 'pending',
+            ip: req.ip
         });
+        
+        console.log(`✅ Code généré pour ${cleanPhone}: ${code}`);
         
         res.json({
             success: true,
-            code,
+            code: code,
+            phone: cleanPhone,
             message: 'Code généré avec succès',
-            instructions: 'Sur WhatsApp, allez dans Paramètres > Périphériques liés > Ajouter un périphérique'
+            instructions: 'Sur WhatsApp : Paramètres > Périphériques liés > Ajouter un périphérique',
+            expiresIn: '5 minutes',
+            timestamp: Date.now()
         });
         
     } catch (error) {
-        console.error('Erreur génération paircode:', error);
-        res.status(500).json({ error: 'Erreur interne du serveur' });
+        console.error('❌ Erreur génération paircode:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Erreur interne du serveur',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 });
 
 // API pour vérifier un utilisateur
 app.get('/api/check-user/:phone', (req, res) => {
-    const { phone } = req.params;
-    const cleanPhone = phone.replace(/\D/g, '');
-    
-    const userData = usersDB.get(cleanPhone);
-    
-    if (!userData) {
-        return res.json({ exists: false });
+    try {
+        const { phone } = req.params;
+        const cleanPhone = phone.replace(/\D/g, '');
+        
+        const userData = usersDB.get(cleanPhone);
+        
+        if (!userData) {
+            return res.json({ 
+                exists: false,
+                message: 'Aucun code généré pour ce numéro'
+            });
+        }
+        
+        // Vérifier si le code a expiré (5 minutes)
+        const now = Date.now();
+        const expiresAt = userData.timestamp + (5 * 60 * 1000);
+        const isExpired = now > expiresAt;
+        
+        if (isExpired) {
+            usersDB.delete(cleanPhone);
+            return res.json({ 
+                exists: false, 
+                expired: true,
+                message: 'Le code a expiré. Veuillez en générer un nouveau.'
+            });
+        }
+        
+        res.json({
+            exists: true,
+            code: userData.code,
+            phone: cleanPhone,
+            timestamp: userData.timestamp,
+            expiresAt: expiresAt,
+            status: userData.status,
+            timeRemaining: Math.max(0, Math.floor((expiresAt - now) / 1000)),
+            timeRemainingFormatted: formatTimeRemaining(expiresAt - now)
+        });
+    } catch (error) {
+        console.error('Erreur vérification utilisateur:', error);
+        res.status(500).json({ 
+            error: 'Erreur interne du serveur',
+            message: error.message 
+        });
     }
-    
-    res.json({
-        exists: true,
-        code: userData.code,
-        timestamp: userData.timestamp,
-        status: userData.status
-    });
 });
+
+// Fonction pour formater le temps restant
+function formatTimeRemaining(ms) {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
 
 // Endpoint de santé pour Render.com
 app.get('/health', (req, res) => {
-    res.json({ 
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        bot: isBotReady() ? 'connected' : 'disconnected'
+    try {
+        let botStatus = 'unknown';
+        try {
+            const { isBotReady } = require('./index.js');
+            botStatus = isBotReady ? (isBotReady() ? 'connected' : 'disconnected') : 'not_loaded';
+        } catch (error) {
+            botStatus = 'error';
+        }
+        
+        res.json({ 
+            status: 'healthy',
+            timestamp: new Date().toISOString(),
+            serverUptime: process.uptime(),
+            bot: botStatus,
+            memory: {
+                rss: `${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`,
+                heapTotal: `${Math.round(process.memoryUsage().heapTotal / 1024 / 1024)}MB`,
+                heapUsed: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`
+            },
+            nodeVersion: process.version,
+            platform: process.platform,
+            port: PORT,
+            users: usersDB.size
+        });
+    } catch (error) {
+        res.status(500).json({
+            status: 'degraded',
+            timestamp: new Date().toISOString(),
+            error: error.message,
+            serverUptime: process.uptime()
+        });
+    }
+});
+
+// Route pour afficher les infos du serveur
+app.get('/info', (req, res) => {
+    res.json({
+        name: 'HEXGATE V3 WhatsApp Bot',
+        version: '3.0.0',
+        description: 'Interface web pour la connexion au bot WhatsApp',
+        author: 'HEXTECH',
+        endpoints: {
+            home: '/',
+            qrAlternative: '/qr',
+            status: 'GET /api/status',
+            generateCode: 'POST /api/generate-paircode',
+            checkUser: 'GET /api/check-user/:phone',
+            health: '/health',
+            info: '/info'
+        },
+        features: [
+            'Génération de codes de pairing WhatsApp',
+            'Interface web responsive',
+            'Connexion multi-appareils',
+            'Bot WhatsApp avec commandes',
+            'Déploiement sur Render.com'
+        ],
+        environment: {
+            port: PORT,
+            nodeEnv: process.env.NODE_ENV || 'development',
+            platform: process.platform,
+            renderExternalUrl: process.env.RENDER_EXTERNAL_URL || 'localhost'
+        },
+        statistics: {
+            activeUsers: usersDB.size,
+            serverUptime: process.uptime()
+        }
     });
+});
+
+// Route pour nettoyer les codes expirés
+app.get('/api/cleanup', (req, res) => {
+    try {
+        const now = Date.now();
+        let cleaned = 0;
+        
+        for (const [phone, data] of usersDB.entries()) {
+            if (now > data.timestamp + (5 * 60 * 1000)) {
+                usersDB.delete(phone);
+                cleaned++;
+            }
+        }
+        
+        res.json({
+            success: true,
+            cleaned: cleaned,
+            remaining: usersDB.size,
+            message: `Nettoyage effectué: ${cleaned} codes expirés supprimés`
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
 });
 
 // Route 404
 app.use((req, res) => {
-    res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
+    res.status(404).json({
+        error: 'Route non trouvée',
+        path: req.path,
+        method: req.method,
+        availableRoutes: [
+            { path: '/', method: 'GET', description: 'Page d\'accueil' },
+            { path: '/qr', method: 'GET', description: 'Page QR code alternative' },
+            { path: '/api/status', method: 'GET', description: 'Statut du serveur et du bot' },
+            { path: '/api/generate-paircode', method: 'POST', description: 'Générer un code de pairing' },
+            { path: '/api/check-user/:phone', method: 'GET', description: 'Vérifier un code utilisateur' },
+            { path: '/health', method: 'GET', description: 'Santé du serveur' },
+            { path: '/info', method: 'GET', description: 'Informations du serveur' }
+        ]
+    });
+});
+
+// Middleware de gestion d'erreurs global
+app.use((err, req, res, next) => {
+    console.error('❌ Erreur serveur:', err.stack);
+    res.status(500).json({
+        error: 'Erreur interne du serveur',
+        message: process.env.NODE_ENV === 'development' ? err.message : 'Une erreur est survenue',
+        timestamp: new Date().toISOString()
+    });
 });
 
 // Démarrer le serveur
-app.listen(PORT, () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Serveur web démarré sur le port ${PORT}`);
     console.log(`🌐 Accédez à: http://localhost:${PORT}`);
-    console.log(`🤖 Statut bot: ${isBotReady() ? '✅ Connecté' : '⏳ En attente'}`);
+    console.log(`🌍 Ou sur: http://0.0.0.0:${PORT}`);
+    console.log(`📡 Écoute sur toutes les interfaces réseau`);
+    
+    // Afficher les infos pour le debug
+    console.log(`🤖 Environnement: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🖥️  Plateforme: ${process.platform}`);
+    console.log(`⚡ Node.js: ${process.version}`);
+    console.log(`📊 Mémoire: ${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`);
+    
+    // Vérifier si le dossier public existe
+    const publicDir = path.join(__dirname, 'public');
+    if (fs.existsSync(publicDir)) {
+        console.log(`📁 Dossier public: ${publicDir} (OK)`);
+    } else {
+        console.log(`⚠️  Dossier public non trouvé: ${publicDir}`);
+        console.log(`📁 Création du dossier public...`);
+        fs.mkdirSync(publicDir, { recursive: true });
+        console.log(`✅ Dossier public créé`);
+    }
+    
+    // Démarrer le bot WhatsApp après un délai
+    console.log(`⏳ Démarrage du bot WhatsApp dans 5 secondes...`);
+    setTimeout(() => {
+        try {
+            console.log(`🤖 Tentative de démarrage du bot...`);
+            const { startBot } = require('./index.js');
+            if (startBot && typeof startBot === 'function') {
+                console.log(`✅ Fonction startBot trouvée, démarrage...`);
+                startBot();
+                console.log(`✅ Bot WhatsApp démarré avec succès`);
+            } else {
+                console.log(`⚠️ Fonction startBot non trouvée dans index.js`);
+                console.log(`⚠️ Le bot démarrera automatiquement lors de la première connexion`);
+            }
+        } catch (botError) {
+            console.error(`❌ Erreur démarrage bot: ${botError.message}`);
+            console.error(`🔍 Stack: ${botError.stack}`);
+            console.log(`🔄 Nouvelle tentative dans 30 secondes...`);
+            setTimeout(() => {
+                try {
+                    const { startBot } = require('./index.js');
+                    if (startBot && typeof startBot === 'function') {
+                        startBot();
+                    }
+                } catch (retryError) {
+                    console.error(`❌ Échec de la nouvelle tentative: ${retryError.message}`);
+                }
+            }, 30000);
+        }
+    }, 5000);
+});
+
+// Gestion des erreurs du serveur
+server.on('error', (error) => {
+    console.error(`❌ Erreur serveur: ${error.message}`);
+    if (error.code === 'EADDRINUSE') {
+        console.log(`⚠️ Le port ${PORT} est déjà utilisé. Essayez un autre port.`);
+        process.exit(1);
+    } else if (error.code === 'EACCES') {
+        console.log(`⚠️ Permission refusée sur le port ${PORT}. Essayez un port supérieur à 1024.`);
+        process.exit(1);
+    }
 });
 
 // Gérer la fermeture propre
 process.on('SIGTERM', () => {
     console.log('🛑 Signal SIGTERM reçu, fermeture propre...');
-    process.exit(0);
+    server.close(() => {
+        console.log('✅ Serveur web fermé proprement');
+        process.exit(0);
+    });
 });
+
+process.on('SIGINT', () => {
+    console.log('🛑 Signal SIGINT (Ctrl+C) reçu, fermeture...');
+    server.close(() => {
+        console.log('✅ Serveur web fermé proprement');
+        process.exit(0);
+    });
+});
+
+// Nettoyage périodique des codes expirés
+setInterval(() => {
+    const now = Date.now();
+    let cleaned = 0;
+    
+    for (const [phone, data] of usersDB.entries()) {
+        if (now > data.timestamp + (5 * 60 * 1000)) {
+            usersDB.delete(phone);
+            cleaned++;
+        }
+    }
+    
+    if (cleaned > 0) {
+        console.log(`🧹 Nettoyage automatique: ${cleaned} codes expirés supprimés`);
+    }
+}, 60000); // Toutes les minutes
+
+// Exporter l'application pour les tests
+module.exports = app;
