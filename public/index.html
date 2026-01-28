@@ -3,455 +3,192 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LISA MD - WhatsApp Bot</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>HEXGATE V3 - Connexion WhatsApp</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-
-        .container {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 20px;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
-            width: 100%;
-            max-width: 500px;
-            overflow: hidden;
-        }
-
-        .header {
-            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
-            color: white;
-            padding: 30px 20px;
-            text-align: center;
-            position: relative;
-        }
-
-        .logo {
-            width: 80px;
-            height: 80px;
-            background: white;
-            border-radius: 50%;
-            margin: 0 auto 15px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 36px;
-            color: #25D366;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-        }
-
-        .title {
-            font-size: 28px;
-            font-weight: 700;
-            margin-bottom: 5px;
-        }
-
-        .subtitle {
-            font-size: 16px;
-            opacity: 0.9;
-            font-weight: 300;
-        }
-
-        .status-badge {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            background: rgba(255, 255, 255, 0.2);
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .content {
-            padding: 30px;
-        }
-
-        .form-group {
-            margin-bottom: 25px;
-        }
-
-        .form-label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #333;
-            font-size: 14px;
-        }
-
-        .input-group {
-            display: flex;
-            align-items: center;
-            background: #f5f5f5;
-            border-radius: 12px;
-            padding: 5px;
-            border: 2px solid #e0e0e0;
-            transition: all 0.3s;
-        }
-
-        .input-group:focus-within {
-            border-color: #6a11cb;
-            background: white;
-        }
-
-        .country-code {
-            padding: 0 15px;
-            font-weight: 600;
-            color: #555;
-            border-right: 1px solid #ddd;
-        }
-
-        .input-group input {
-            flex: 1;
-            border: none;
-            outline: none;
-            padding: 15px;
-            background: transparent;
-            font-size: 16px;
-            font-weight: 500;
-        }
-
-        .btn {
-            width: 100%;
-            padding: 18px;
-            background: linear-gradient(135deg, #25D366 0%, #1DA851 100%);
-            color: white;
-            border: none;
-            border-radius: 12px;
-            font-size: 18px;
-            font-weight: 700;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            transition: all 0.3s;
-            box-shadow: 0 5px 15px rgba(37, 211, 102, 0.3);
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(37, 211, 102, 0.4);
-        }
-
-        .btn:active {
-            transform: translateY(0);
-        }
-
-        .btn:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-
-        .result-container {
-            background: #f8f9fa;
-            border-radius: 12px;
-            padding: 25px;
-            margin-top: 25px;
-            text-align: center;
-            border: 2px dashed #dee2e6;
-            display: none;
-        }
-
-        .result-container.show {
-            display: block;
-            animation: fadeIn 0.5s;
-        }
-
-        .code-display {
-            font-size: 42px;
-            font-weight: 800;
-            color: #6a11cb;
-            letter-spacing: 5px;
-            margin: 15px 0;
-            padding: 15px;
-            background: white;
-            border-radius: 10px;
-            border: 2px solid #e0e0e0;
-        }
-
-        .instructions {
-            background: #e8f5e9;
-            padding: 15px;
-            border-radius: 10px;
-            margin-top: 20px;
-            text-align: left;
-            font-size: 14px;
-        }
-
-        .instructions ol {
-            margin-left: 20px;
-            margin-top: 10px;
-        }
-
-        .instructions li {
-            margin-bottom: 8px;
-        }
-
-        .loader {
-            display: none;
-            width: 40px;
-            height: 40px;
-            margin: 20px auto;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #25D366;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        .loader.show {
-            display: block;
-        }
-
-        .bot-status {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            margin-top: 20px;
-            padding: 12px;
-            background: #f0f7ff;
-            border-radius: 10px;
-            font-size: 14px;
-        }
-
-        .status-indicator {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: #ccc;
-        }
-
-        .status-indicator.online {
-            background: #25D366;
-            animation: pulse 2s infinite;
-        }
-
-        .footer {
-            text-align: center;
-            padding: 20px;
-            border-top: 1px solid #eee;
-            color: #666;
-            font-size: 12px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
-        }
-
-        @media (max-width: 600px) {
-            .container {
-                border-radius: 15px;
-            }
-            
-            .header {
-                padding: 25px 15px;
-            }
-            
-            .content {
-                padding: 20px;
-            }
-            
-            .code-display {
-                font-size: 32px;
-                padding: 10px;
-            }
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: white; min-height: 100vh; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+        .header { text-align: center; padding: 40px 0; }
+        .logo { font-size: 48px; margin-bottom: 20px; }
+        .title { font-size: 32px; font-weight: 700; margin-bottom: 10px; color: #25D366; }
+        .subtitle { font-size: 16px; opacity: 0.8; margin-bottom: 30px; }
+        .card { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border-radius: 15px; padding: 30px; margin-bottom: 30px; border: 1px solid rgba(255, 255, 255, 0.2); }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 500; }
+        input { width: 100%; padding: 15px; border: none; border-radius: 10px; background: rgba(255, 255, 255, 0.1); color: white; font-size: 16px; }
+        input:focus { outline: 2px solid #25D366; background: rgba(255, 255, 255, 0.15); }
+        .btn { display: block; width: 100%; padding: 18px; background: linear-gradient(135deg, #25D366 0%, #1DA851 100%); color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: 700; cursor: pointer; transition: all 0.3s; margin-top: 20px; }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(37, 211, 102, 0.4); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .result { margin-top: 30px; padding: 20px; background: rgba(37, 211, 102, 0.1); border-radius: 10px; border-left: 4px solid #25D366; display: none; }
+        .result.show { display: block; }
+        .code { font-size: 32px; font-weight: 700; letter-spacing: 5px; text-align: center; margin: 20px 0; color: #25D366; }
+        .instructions { margin-top: 20px; padding: 15px; background: rgba(0, 0, 0, 0.2); border-radius: 8px; }
+        .status { padding: 15px; border-radius: 10px; margin-bottom: 20px; text-align: center; }
+        .status.online { background: rgba(37, 211, 102, 0.2); border: 1px solid #25D366; }
+        .status.offline { background: rgba(255, 0, 0, 0.2); border: 1px solid #ff0000; }
+        .footer { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.1); font-size: 12px; opacity: 0.6; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <div class="logo">
-                <i class="fab fa-whatsapp"></i>
-            </div>
-            <h1 class="title">LISA MD</h1>
-            <p class="subtitle">APPAREILS DES APPAREILS</p>
-            <div class="status-badge">OFFICIEL</div>
+            <div class="logo">🤖</div>
+            <h1 class="title">HEXGATE V3</h1>
+            <p class="subtitle">Connexion WhatsApp via Pairing Code</p>
         </div>
 
-        <div class="content">
-            <div class="form-group">
-                <label class="form-label">SAISISSEZ VOTRE NUMÉRO WHATSAPP</label>
-                <div class="input-group">
-                    <span class="country-code">+243</span>
-                    <input type="tel" id="phoneNumber" placeholder="983205767" maxlength="9" inputmode="numeric">
-                </div>
+        <div class="card">
+            <div class="status" id="serverStatus">
+                <strong>⏳ Vérification du statut...</strong>
             </div>
 
-            <button class="btn" id="generateBtn">
-                <i class="fas fa-key"></i>
-                OBTENIR LE CODE
+            <div class="form-group">
+                <label for="phoneNumber">📱 Numéro WhatsApp (avec indicatif pays)</label>
+                <input type="tel" id="phoneNumber" placeholder="Exemple: 243983205767" value="243983205767">
+            </div>
+
+            <button class="btn" id="generateBtn" onclick="generateCode()">
+                <span id="btnText">🔑 GÉNÉRER LE CODE</span>
+                <span id="btnLoading" style="display:none;">⏳ Génération en cours...</span>
             </button>
 
-            <div class="bot-status">
-                <div class="status-indicator" id="statusIndicator"></div>
-                <span id="statusText">Vérification du statut...</span>
-            </div>
-
-            <div class="result-container" id="resultContainer">
-                <div class="loader" id="loader"></div>
-                <h3>Votre code de pairing :</h3>
-                <div class="code-display" id="codeDisplay"></div>
-                <p>Ce code expire dans 5 minutes</p>
+            <div class="result" id="result">
+                <h3>✅ Code généré avec succès !</h3>
+                <div class="code" id="codeDisplay"></div>
+                <p>Ce code expire dans <span id="expiryTime">5:00</span> minutes</p>
                 
                 <div class="instructions">
-                    <strong>Instructions :</strong>
+                    <h4>📱 Instructions :</h4>
                     <ol>
                         <li>Ouvrez WhatsApp sur votre téléphone</li>
-                        <li>Allez dans <strong>Paramètres → Périphériques liés</strong></li>
-                        <li>Cliquez sur <strong>Ajouter un périphérique</strong></li>
-                        <li>Saisissez le code ci-dessus quand demandé</li>
-                        <li>Attendez la confirmation de connexion</li>
+                        <li>Allez dans <strong>Paramètres → Périphériques liés → Ajouter un périphérique</strong></li>
+                        <li>Saisissez ce code : <strong id="codeText"></strong></li>
+                        <li>Attendez la connexion (peut prendre quelques secondes)</li>
+                        <li>Une fois connecté, vous pouvez utiliser le bot avec les commandes habituelles</li>
                     </ol>
                 </div>
+                
+                <button class="btn" onclick="copyCode()" style="background: #667eea; margin-top: 20px;">
+                    📋 Copier le code
+                </button>
             </div>
         </div>
 
         <div class="footer">
-            PROPULSÉ PAR SADIYA TECH | HEXGATE V3
+            Propulsé par HEXTECH | HEXGATE V3 WhatsApp Bot<br>
+            <a href="/qr" style="color: #25D366; text-decoration: none;">Version mobile</a> | 
+            <a href="/info" style="color: #667eea; text-decoration: none;">Infos serveur</a>
         </div>
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const phoneInput = document.getElementById('phoneNumber');
-            const generateBtn = document.getElementById('generateBtn');
-            const resultContainer = document.getElementById('resultContainer');
-            const codeDisplay = document.getElementById('codeDisplay');
-            const loader = document.getElementById('loader');
-            const statusIndicator = document.getElementById('statusIndicator');
-            const statusText = document.getElementById('statusText');
-
-            // Vérifier le statut du bot
-            async function checkBotStatus() {
-                try {
-                    const response = await fetch('/api/status');
-                    const data = await response.json();
-                    
-                    if (data.botReady) {
-                        statusIndicator.className = 'status-indicator online';
-                        statusText.textContent = 'Bot connecté et prêt';
-                        generateBtn.disabled = false;
-                    } else {
-                        statusIndicator.className = 'status-indicator';
-                        statusText.textContent = 'Bot en attente de connexion WhatsApp...';
-                        generateBtn.disabled = true;
-                    }
-                } catch (error) {
-                    statusIndicator.className = 'status-indicator';
-                    statusText.textContent = 'Impossible de contacter le serveur';
-                    generateBtn.disabled = true;
-                    console.error('Erreur vérification statut:', error);
-                }
-            }
-
-            // Générer le code de pairing
-            async function generatePairCode() {
-                const phone = phoneInput.value.trim();
+        // Vérifier le statut du serveur
+        async function checkServerStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
                 
-                if (!phone || phone.length !== 9) {
-                    alert('Veuillez saisir un numéro valide (9 chiffres)');
-                    return;
+                const statusElement = document.getElementById('serverStatus');
+                if (data.botReady) {
+                    statusElement.className = 'status online';
+                    statusElement.innerHTML = '<strong>✅ Bot WhatsApp Connecté</strong><p>Prêt à générer des codes de pairing</p>';
+                    document.getElementById('generateBtn').disabled = false;
+                } else {
+                    statusElement.className = 'status offline';
+                    statusElement.innerHTML = '<strong>⏳ Bot en démarrage...</strong><p>Le bot WhatsApp se connecte. Veuillez patienter...</p>';
+                    document.getElementById('generateBtn').disabled = true;
                 }
+            } catch (error) {
+                const statusElement = document.getElementById('serverStatus');
+                statusElement.className = 'status offline';
+                statusElement.innerHTML = '<strong>❌ Serveur indisponible</strong><p>Impossible de se connecter au serveur</p>';
+                document.getElementById('generateBtn').disabled = true;
+            }
+        }
 
-                // Afficher le loader
-                resultContainer.classList.add('show');
-                loader.classList.add('show');
-                codeDisplay.textContent = '';
-                generateBtn.disabled = true;
-                generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> GÉNÉRATION...';
-
-                try {
-                    const response = await fetch('/api/generate-paircode', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ phone: '243' + phone })
-                    });
-
-                    const data = await response.json();
-
-                    // Masquer le loader
-                    loader.classList.remove('show');
-
-                    if (data.success) {
-                        // Afficher le code
-                        codeDisplay.textContent = data.code;
-                        
-                        // Mettre à jour le bouton
-                        generateBtn.innerHTML = '<i class="fas fa-redo"></i> GÉNÉRER UN NOUVEAU CODE';
-                        
-                        // Copier automatiquement dans le presse-papier
-                        navigator.clipboard.writeText(data.code).then(() => {
-                            console.log('Code copié dans le presse-papier');
-                        });
-                    } else {
-                        codeDisplay.textContent = 'ERREUR';
-                        alert('Erreur: ' + (data.error || 'Impossible de générer le code'));
-                    }
-                } catch (error) {
-                    loader.classList.remove('show');
-                    codeDisplay.textContent = 'ERREUR';
-                    alert('Erreur de connexion au serveur');
-                    console.error('Erreur génération:', error);
-                } finally {
-                    generateBtn.disabled = false;
-                    if (!codeDisplay.textContent) {
-                        generateBtn.innerHTML = '<i class="fas fa-key"></i> OBTENIR LE CODE';
-                    }
-                }
+        // Générer un code
+        async function generateCode() {
+            const phone = document.getElementById('phoneNumber').value.trim();
+            if (!phone) {
+                alert('Veuillez entrer un numéro WhatsApp');
+                return;
             }
 
-            // Événements
-            generateBtn.addEventListener('click', generatePairCode);
+            const btn = document.getElementById('generateBtn');
+            const btnText = document.getElementById('btnText');
+            const btnLoading = document.getElementById('btnLoading');
             
-            phoneInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    generatePairCode();
-                }
+            btnText.style.display = 'none';
+            btnLoading.style.display = 'inline';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('/api/generate-paircode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone: phone })
+                });
+
+                const data = await response.json();
                 
-                // N'autoriser que les chiffres
-                if (!/[0-9]/.test(e.key)) {
-                    e.preventDefault();
+                if (data.success) {
+                    // Afficher le résultat
+                    document.getElementById('codeDisplay').textContent = data.code;
+                    document.getElementById('codeText').textContent = data.code;
+                    document.getElementById('result').classList.add('show');
+                    
+                    // Démarrer le compte à rebours
+                    startCountdown(5 * 60); // 5 minutes
+                    
+                    // Faire défiler vers le résultat
+                    document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
+                } else {
+                    alert('Erreur: ' + (data.error || 'Impossible de générer le code'));
                 }
+            } catch (error) {
+                alert('Erreur de connexion au serveur');
+                console.error(error);
+            } finally {
+                btnText.style.display = 'inline';
+                btnLoading.style.display = 'none';
+                btn.disabled = false;
+            }
+        }
+
+        // Copier le code
+        function copyCode() {
+            const code = document.getElementById('codeText').textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                alert('Code copié dans le presse-papier !');
             });
+        }
 
-            // Vérifier le statut toutes les 10 secondes
-            checkBotStatus();
-            setInterval(checkBotStatus, 10000);
+        // Compte à rebours
+        function startCountdown(seconds) {
+            const expiryElement = document.getElementById('expiryTime');
+            
+            function updateCountdown() {
+                const minutes = Math.floor(seconds / 60);
+                const remainingSeconds = seconds % 60;
+                expiryElement.textContent = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+                
+                if (seconds > 0) {
+                    seconds--;
+                    setTimeout(updateCountdown, 1000);
+                } else {
+                    expiryElement.textContent = '0:00';
+                    document.getElementById('result').innerHTML += 
+                        '<div style="color: #ff6b6b; margin-top: 10px;">⏰ Le code a expiré. Veuillez en générer un nouveau.</div>';
+                }
+            }
+            
+            updateCountdown();
+        }
 
-            // Focus sur le champ de saisie
-            phoneInput.focus();
-        });
+        // Vérifier le statut au chargement et toutes les 10 secondes
+        checkServerStatus();
+        setInterval(checkServerStatus, 10000);
     </script>
 </body>
-</html>
+                        </html>
