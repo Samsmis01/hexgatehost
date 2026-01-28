@@ -4,7 +4,6 @@ const fs = require('fs');
 
 // Créer l'application Express
 const app = express();
-// Render.com fournit le port via process.env.PORT, sinon utiliser 3000
 const PORT = process.env.PORT || 3000;
 
 // Middleware
@@ -15,8 +14,37 @@ app.use(express.static('public'));
 // Variables pour l'interface web
 const usersDB = new Map();
 
-// Variable pour stocker le module bot (initialisé plus tard)
+// Variable pour stocker le module bot
 let botModule = null;
+let botStarted = false;
+
+// Fonction pour initialiser le bot
+async function initializeBot() {
+    try {
+        if (botModule || botStarted) return true;
+        
+        console.log('🤖 Initialisation du bot WhatsApp...');
+        
+        // Charger le module bot
+        botModule = require('./index.js');
+        console.log('✅ Module bot chargé');
+        
+        // Démarrer le bot si la fonction existe
+        if (botModule.startBot && typeof botModule.startBot === 'function') {
+            console.log('🚀 Démarrage du bot...');
+            await botModule.startBot();
+            botStarted = true;
+            console.log('✅ Bot démarré avec succès');
+        } else {
+            console.log('⚠️ Bot auto-démarrable ou déjà démarré');
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('❌ Erreur initialisation bot:', error.message);
+        return false;
+    }
+}
 
 // Page d'accueil
 app.get('/', (req, res) => {
@@ -31,149 +59,32 @@ app.get('/qr', (req, res) => {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>QR Code WhatsApp - LISA MD</title>
+            <title>QR Code WhatsApp - HEXGATE V3</title>
             <style>
-                * {
-                    margin: 0;
-                    padding: 0;
-                    box-sizing: border-box;
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                }
-
-                body {
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    min-height: 100vh;
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    padding: 20px;
-                }
-
-                .container {
-                    background: rgba(255, 255, 255, 0.95);
-                    border-radius: 20px;
-                    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
-                    width: 100%;
-                    max-width: 500px;
-                    overflow: hidden;
-                    padding: 30px;
-                }
-
-                .header {
-                    background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
-                    color: white;
-                    padding: 20px;
-                    text-align: center;
-                    border-radius: 15px;
-                    margin-bottom: 30px;
-                }
-
-                .logo {
-                    width: 60px;
-                    height: 60px;
-                    background: white;
-                    border-radius: 50%;
-                    margin: 0 auto 15px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 28px;
-                    color: #25D366;
-                }
-
-                .title {
-                    font-size: 24px;
-                    font-weight: 700;
-                    margin-bottom: 5px;
-                }
-
-                .subtitle {
-                    font-size: 14px;
-                    opacity: 0.9;
-                    font-weight: 300;
-                }
-
-                .instructions {
-                    background: #f8f9fa;
-                    padding: 20px;
-                    border-radius: 12px;
-                    margin: 20px 0;
-                    border-left: 4px solid #25D366;
-                }
-
-                .instructions h3 {
-                    color: #333;
-                    margin-bottom: 10px;
-                }
-
-                .instructions ol {
-                    margin-left: 20px;
-                    margin-top: 10px;
-                }
-
-                .instructions li {
-                    margin-bottom: 8px;
-                    color: #555;
-                }
-
-                .btn {
-                    display: inline-block;
-                    padding: 15px 30px;
-                    background: linear-gradient(135deg, #25D366 0%, #1DA851 100%);
-                    color: white;
-                    text-decoration: none;
-                    border-radius: 12px;
-                    font-weight: 700;
-                    margin-top: 20px;
-                    transition: all 0.3s;
-                    border: none;
-                    cursor: pointer;
-                    font-size: 16px;
-                    width: 100%;
-                    text-align: center;
-                }
-
-                .btn:hover {
-                    transform: translateY(-2px);
-                    box-shadow: 0 8px 20px rgba(37, 211, 102, 0.3);
-                }
-
-                .footer {
-                    text-align: center;
-                    margin-top: 30px;
-                    padding-top: 20px;
-                    border-top: 1px solid #eee;
-                    color: #666;
-                    font-size: 12px;
-                }
-
-                .status {
-                    background: #e8f5e9;
-                    padding: 15px;
-                    border-radius: 10px;
-                    margin: 20px 0;
-                    text-align: center;
-                    border: 1px solid #c8e6c9;
-                }
-
-                .status.online {
-                    background: #e8f5e9;
-                    border-color: #c8e6c9;
-                }
-
-                .status.offline {
-                    background: #ffebee;
-                    border-color: #ffcdd2;
-                }
+                * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+                body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px; }
+                .container { background: rgba(255, 255, 255, 0.95); border-radius: 20px; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2); width: 100%; max-width: 500px; overflow: hidden; padding: 30px; }
+                .header { background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%); color: white; padding: 20px; text-align: center; border-radius: 15px; margin-bottom: 30px; }
+                .logo { width: 60px; height: 60px; background: white; border-radius: 50%; margin: 0 auto 15px; display: flex; align-items: center; justify-content: center; font-size: 28px; color: #25D366; }
+                .title { font-size: 24px; font-weight: 700; margin-bottom: 5px; }
+                .subtitle { font-size: 14px; opacity: 0.9; font-weight: 300; }
+                .instructions { background: #f8f9fa; padding: 20px; border-radius: 12px; margin: 20px 0; border-left: 4px solid #25D366; }
+                .instructions h3 { color: #333; margin-bottom: 10px; }
+                .instructions ol { margin-left: 20px; margin-top: 10px; }
+                .instructions li { margin-bottom: 8px; color: #555; }
+                .btn { display: inline-block; padding: 15px 30px; background: linear-gradient(135deg, #25D366 0%, #1DA851 100%); color: white; text-decoration: none; border-radius: 12px; font-weight: 700; margin-top: 20px; transition: all 0.3s; border: none; cursor: pointer; font-size: 16px; width: 100%; text-align: center; }
+                .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(37, 211, 102, 0.3); }
+                .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #666; font-size: 12px; }
+                .status { background: #e8f5e9; padding: 15px; border-radius: 10px; margin: 20px 0; text-align: center; border: 1px solid #c8e6c9; }
+                .status.online { background: #e8f5e9; border-color: #c8e6c9; }
+                .status.offline { background: #ffebee; border-color: #ffcdd2; }
             </style>
         </head>
         <body>
             <div class="container">
                 <div class="header">
-                    <div class="logo">
-                        <i class="fab fa-whatsapp"></i>
-                    </div>
-                    <h1 class="title">LISA MD</h1>
+                    <div class="logo">📱</div>
+                    <h1 class="title">HEXGATE V3</h1>
                     <p class="subtitle">CONNEXION WHATSAPP</p>
                 </div>
 
@@ -189,22 +100,17 @@ app.get('/qr', (req, res) => {
                     </ol>
                 </div>
 
-                <div class="status online" id="serverStatus">
-                    <strong>✅ Serveur en ligne</strong>
-                    <p>Interface web disponible pour la connexion</p>
+                <div class="status" id="serverStatus">
+                    <strong>⏳ Vérification du statut...</strong>
+                    <p>Chargement en cours</p>
                 </div>
 
-                <a href="/" class="btn">
-                    <i class="fas fa-arrow-left"></i> RETOUR À L'ACCUEIL
-                </a>
+                <a href="/" class="btn">← RETOUR À L'ACCUEIL</a>
 
-                <div class="footer">
-                    PROPULSÉ PAR SADIYA TECH | HEXGATE V3
-                </div>
+                <div class="footer">PROPULSÉ PAR HEXTECH | HEXGATE V3</div>
             </div>
 
             <script>
-                // Vérifier le statut du serveur
                 async function checkServerStatus() {
                     try {
                         const response = await fetch('/api/status');
@@ -223,11 +129,9 @@ app.get('/qr', (req, res) => {
                     }
                 }
 
-                // Vérifier le statut toutes les 10 secondes
                 checkServerStatus();
                 setInterval(checkServerStatus, 10000);
             </script>
-            <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
         </body>
         </html>
     `);
@@ -239,13 +143,12 @@ app.get('/api/status', (req, res) => {
         let botReady = false;
         let config = {};
         
-        // Essayer de charger le bot
         if (botModule) {
             try {
                 botReady = botModule.isBotReady ? botModule.isBotReady() : false;
                 config = botModule.config || {};
             } catch (botError) {
-                console.log('Bot non encore initialisé:', botError.message);
+                console.log('Bot erreur:', botError.message);
             }
         }
         
@@ -296,13 +199,16 @@ app.post('/api/generate-paircode', async (req, res) => {
         
         console.log(`📱 Demande de code pour: ${cleanPhone}`);
         
-        // Vérifier si le bot est prêt
+        // Initialiser le bot si pas encore fait
         if (!botModule) {
-            return res.status(503).json({
-                success: false,
-                error: 'Bot non disponible',
-                message: 'Le bot WhatsApp est en cours de démarrage. Veuillez réessayer dans quelques instants.'
-            });
+            const initialized = await initializeBot();
+            if (!initialized) {
+                return res.status(503).json({
+                    success: false,
+                    error: 'Bot non disponible',
+                    message: 'Le bot WhatsApp est en cours de démarrage. Veuillez réessayer dans quelques instants.'
+                });
+            }
         }
         
         const { isBotReady, generatePairCode } = botModule;
@@ -494,30 +400,22 @@ app.get('/info', (req, res) => {
     });
 });
 
-// Route pour nettoyer les codes expirés
-app.get('/api/cleanup', (req, res) => {
+// Route pour démarrer le bot manuellement
+app.post('/api/start-bot', async (req, res) => {
     try {
-        const now = Date.now();
-        let cleaned = 0;
-        
-        for (const [phone, data] of usersDB.entries()) {
-            if (now > data.timestamp + (5 * 60 * 1000)) {
-                usersDB.delete(phone);
-                cleaned++;
-            }
+        if (botStarted) {
+            return res.json({ success: true, message: 'Bot déjà démarré' });
         }
         
-        res.json({
-            success: true,
-            cleaned: cleaned,
-            remaining: usersDB.size,
-            message: `Nettoyage effectué: ${cleaned} codes expirés supprimés`
-        });
+        const initialized = await initializeBot();
+        
+        if (initialized) {
+            res.json({ success: true, message: 'Bot démarré avec succès' });
+        } else {
+            res.status(500).json({ success: false, error: 'Échec du démarrage du bot' });
+        }
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
@@ -534,7 +432,8 @@ app.use((req, res) => {
             { path: '/api/generate-paircode', method: 'POST', description: 'Générer un code de pairing' },
             { path: '/api/check-user/:phone', method: 'GET', description: 'Vérifier un code utilisateur' },
             { path: '/health', method: 'GET', description: 'Santé du serveur' },
-            { path: '/info', method: 'GET', description: 'Informations du serveur' }
+            { path: '/info', method: 'GET', description: 'Informations du serveur' },
+            { path: '/api/start-bot', method: 'POST', description: 'Démarrer le bot manuellement' }
         ]
     });
 });
@@ -558,7 +457,6 @@ const server = app.listen(PORT, () => {
         console.log(`🌍 URL Render: ${process.env.RENDER_EXTERNAL_URL}`);
     }
     
-    // Afficher les infos pour le debug
     console.log(`🤖 Environnement: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🖥️  Plateforme: ${process.platform}`);
     console.log(`⚡ Node.js: ${process.version}`);
@@ -566,11 +464,7 @@ const server = app.listen(PORT, () => {
     
     // Vérifier si le dossier public existe
     const publicDir = path.join(__dirname, 'public');
-    if (fs.existsSync(publicDir)) {
-        console.log(`📁 Dossier public: ${publicDir} (OK)`);
-    } else {
-        console.log(`⚠️  Dossier public non trouvé: ${publicDir}`);
-        console.log(`📁 Création du dossier public...`);
+    if (!fs.existsSync(publicDir)) {
         fs.mkdirSync(publicDir, { recursive: true });
         console.log(`✅ Dossier public créé`);
         
@@ -582,25 +476,19 @@ const server = app.listen(PORT, () => {
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>HEXGATE V3 WhatsApp Bot</title>
             <style>
-                body {
-                    font-family: Arial, sans-serif;
-                    max-width: 800px;
-                    margin: 0 auto;
-                    padding: 20px;
-                    text-align: center;
-                }
-                .container {
-                    background: #f5f5f5;
-                    padding: 30px;
-                    border-radius: 10px;
-                    margin-top: 50px;
-                }
+                body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; text-align: center; }
+                .container { background: #f5f5f5; padding: 30px; border-radius: 10px; margin-top: 50px; }
+                .btn { display: inline-block; padding: 15px 30px; background: #25D366; color: white; text-decoration: none; border-radius: 8px; margin: 10px; }
             </style>
         </head>
         <body>
             <div class="container">
                 <h1>HEXGATE V3 WhatsApp Bot</h1>
-                <p>Serveur web en ligne. Pour utiliser l'interface complète, visitez <a href="/qr">/qr</a></p>
+                <p>Serveur web en ligne. Pour utiliser l'interface complète :</p>
+                <a href="/qr" class="btn">📱 Interface de Connexion WhatsApp</a>
+                <br>
+                <a href="/api/status" class="btn">📊 Statut du Serveur</a>
+                <a href="/info" class="btn">ℹ️ Informations</a>
             </div>
         </body>
         </html>`;
@@ -609,47 +497,25 @@ const server = app.listen(PORT, () => {
         console.log(`📄 Page index.html par défaut créée`);
     }
     
-    // Démarrer le bot WhatsApp dans un processus séparé
-    console.log(`⏳ Démarrage du bot WhatsApp...`);
-    setTimeout(() => {
+    // Initialiser le bot après un délai
+    console.log(`⏳ Initialisation du bot WhatsApp dans 3 secondes...`);
+    setTimeout(async () => {
         try {
-            console.log(`🤖 Chargement du module bot...`);
-            botModule = require('./index.js');
-            console.log(`✅ Module bot chargé avec succès`);
-            
-            // Vérifier si le bot se démarre automatiquement
-            if (botModule && typeof botModule.startBot === 'function') {
-                console.log(`🚀 Fonction startBot trouvée`);
-                console.log(`ℹ️ Le bot se démarrera automatiquement lors de la première connexion`);
-            } else {
-                console.log(`⚠️ Pas de fonction startBot - le bot est probablement auto-démarrable`);
-            }
-            
-        } catch (botError) {
-            console.error(`❌ Erreur chargement bot: ${botError.message}`);
-            console.log(`🔄 Nouvelle tentative dans 10 secondes...`);
-            
-            setTimeout(() => {
-                try {
-                    botModule = require('./index.js');
-                    console.log(`✅ Module bot chargé après nouvelle tentative`);
-                } catch (retryError) {
-                    console.error(`❌ Échec de la nouvelle tentative: ${retryError.message}`);
-                    console.log(`⚠️ Le bot ne sera pas disponible`);
-                }
-            }, 10000);
+            await initializeBot();
+        } catch (error) {
+            console.error(`❌ Échec initialisation bot: ${error.message}`);
         }
-    }, 2000); // Délai plus court
+    }, 3000);
 });
 
 // Gestion des erreurs du serveur
 server.on('error', (error) => {
     console.error(`❌ Erreur serveur: ${error.message}`);
     if (error.code === 'EADDRINUSE') {
-        console.log(`⚠️ Le port ${PORT} est déjà utilisé. Essayez un autre port.`);
+        console.log(`⚠️ Le port ${PORT} est déjà utilisé.`);
         process.exit(1);
     } else if (error.code === 'EACCES') {
-        console.log(`⚠️ Permission refusée sur le port ${PORT}. Essayez un port supérieur à 1024.`);
+        console.log(`⚠️ Permission refusée sur le port ${PORT}.`);
         process.exit(1);
     }
 });
@@ -684,9 +550,9 @@ setInterval(() => {
     }
     
     if (cleaned > 0) {
-        console.log(`🧹 Nettoyage automatique: ${cleaned} codes expirés supprimés`);
+        console.log(`🧹 Nettoyage: ${cleaned} codes expirés supprimés`);
     }
-}, 60000); // Toutes les minutes
+}, 60000);
 
-// Exporter l'application pour les tests
+// Exporter l'application
 module.exports = app;
