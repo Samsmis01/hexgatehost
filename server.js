@@ -15,6 +15,9 @@ app.use(express.static('public'));
 // Variables pour l'interface web
 const usersDB = new Map();
 
+// Variable pour stocker le module bot (initialisé plus tard)
+let botModule = null;
+
 // Page d'accueil
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -237,12 +240,13 @@ app.get('/api/status', (req, res) => {
         let config = {};
         
         // Essayer de charger le bot
-        try {
-            const botModule = require('./index.js');
-            botReady = botModule.isBotReady ? botModule.isBotReady() : false;
-            config = botModule.config || {};
-        } catch (botError) {
-            console.log('Bot non encore initialisé:', botError.message);
+        if (botModule) {
+            try {
+                botReady = botModule.isBotReady ? botModule.isBotReady() : false;
+                config = botModule.config || {};
+            } catch (botError) {
+                console.log('Bot non encore initialisé:', botError.message);
+            }
         }
         
         res.json({
@@ -293,10 +297,7 @@ app.post('/api/generate-paircode', async (req, res) => {
         console.log(`📱 Demande de code pour: ${cleanPhone}`);
         
         // Vérifier si le bot est prêt
-        let botModule;
-        try {
-            botModule = require('./index.js');
-        } catch (error) {
+        if (!botModule) {
             return res.status(503).json({
                 success: false,
                 error: 'Bot non disponible',
@@ -423,11 +424,13 @@ function formatTimeRemaining(ms) {
 app.get('/health', (req, res) => {
     try {
         let botStatus = 'unknown';
-        try {
-            const { isBotReady } = require('./index.js');
-            botStatus = isBotReady ? (isBotReady() ? 'connected' : 'disconnected') : 'not_loaded';
-        } catch (error) {
-            botStatus = 'error';
+        if (botModule) {
+            try {
+                const { isBotReady } = botModule;
+                botStatus = isBotReady ? (isBotReady() ? 'connected' : 'disconnected') : 'not_loaded';
+            } catch (error) {
+                botStatus = 'error';
+            }
         }
         
         res.json({ 
@@ -547,11 +550,13 @@ app.use((err, req, res, next) => {
 });
 
 // Démarrer le serveur
-const server = app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, () => {
     console.log(`🚀 Serveur web démarré sur le port ${PORT}`);
     console.log(`🌐 Accédez à: http://localhost:${PORT}`);
-    console.log(`🌍 Ou sur: http://0.0.0.0:${PORT}`);
-    console.log(`📡 Écoute sur toutes les interfaces réseau`);
+    
+    if (process.env.RENDER_EXTERNAL_URL) {
+        console.log(`🌍 URL Render: ${process.env.RENDER_EXTERNAL_URL}`);
+    }
     
     // Afficher les infos pour le debug
     console.log(`🤖 Environnement: ${process.env.NODE_ENV || 'development'}`);
@@ -568,38 +573,73 @@ const server = app.listen(PORT, '0.0.0.0', () => {
         console.log(`📁 Création du dossier public...`);
         fs.mkdirSync(publicDir, { recursive: true });
         console.log(`✅ Dossier public créé`);
+        
+        // Créer une page index.html par défaut
+        const defaultHtml = `<!DOCTYPE html>
+        <html lang="fr">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>HEXGATE V3 WhatsApp Bot</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    max-width: 800px;
+                    margin: 0 auto;
+                    padding: 20px;
+                    text-align: center;
+                }
+                .container {
+                    background: #f5f5f5;
+                    padding: 30px;
+                    border-radius: 10px;
+                    margin-top: 50px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>HEXGATE V3 WhatsApp Bot</h1>
+                <p>Serveur web en ligne. Pour utiliser l'interface complète, visitez <a href="/qr">/qr</a></p>
+            </div>
+        </body>
+        </html>`;
+        
+        fs.writeFileSync(path.join(publicDir, 'index.html'), defaultHtml);
+        console.log(`📄 Page index.html par défaut créée`);
     }
     
-    // Démarrer le bot WhatsApp après un délai
-    console.log(`⏳ Démarrage du bot WhatsApp dans 5 secondes...`);
+    // Démarrer le bot WhatsApp dans un processus séparé
+    console.log(`⏳ Démarrage du bot WhatsApp...`);
     setTimeout(() => {
         try {
-            console.log(`🤖 Tentative de démarrage du bot...`);
-            const { startBot } = require('./index.js');
-            if (startBot && typeof startBot === 'function') {
-                console.log(`✅ Fonction startBot trouvée, démarrage...`);
-                startBot();
-                console.log(`✅ Bot WhatsApp démarré avec succès`);
+            console.log(`🤖 Chargement du module bot...`);
+            botModule = require('./index.js');
+            console.log(`✅ Module bot chargé avec succès`);
+            
+            // Vérifier si le bot se démarre automatiquement
+            if (botModule && typeof botModule.startBot === 'function') {
+                console.log(`🚀 Fonction startBot trouvée`);
+                console.log(`ℹ️ Le bot se démarrera automatiquement lors de la première connexion`);
             } else {
-                console.log(`⚠️ Fonction startBot non trouvée dans index.js`);
-                console.log(`⚠️ Le bot démarrera automatiquement lors de la première connexion`);
+                console.log(`⚠️ Pas de fonction startBot - le bot est probablement auto-démarrable`);
             }
+            
         } catch (botError) {
-            console.error(`❌ Erreur démarrage bot: ${botError.message}`);
-            console.error(`🔍 Stack: ${botError.stack}`);
-            console.log(`🔄 Nouvelle tentative dans 30 secondes...`);
+            console.error(`❌ Erreur chargement bot: ${botError.message}`);
+            console.log(`🔄 Nouvelle tentative dans 10 secondes...`);
+            
             setTimeout(() => {
                 try {
-                    const { startBot } = require('./index.js');
-                    if (startBot && typeof startBot === 'function') {
-                        startBot();
-                    }
+                    botModule = require('./index.js');
+                    console.log(`✅ Module bot chargé après nouvelle tentative`);
                 } catch (retryError) {
                     console.error(`❌ Échec de la nouvelle tentative: ${retryError.message}`);
+                    console.log(`⚠️ Le bot ne sera pas disponible`);
                 }
-            }, 30000);
+            }, 10000);
         }
-    }, 5000);
+    }, 2000); // Délai plus court
 });
 
 // Gestion des erreurs du serveur
